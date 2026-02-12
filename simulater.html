@@ -1,0 +1,3039 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS2 Pro Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Roboto+Mono:wght@400;700&display=swap');
+        
+        body { 
+            font-family: 'Roboto Mono', monospace; 
+            background-color: #0b0c10; 
+            color: white;
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        canvas { 
+            background-color: #12141a; 
+            border: 1px solid #334155;
+        }
+
+        .hud-font { font-family: 'Oswald', sans-serif; }
+        
+        .radio-msg {
+            animation: fadeIn 0.2s ease-out;
+            padding: 4px 8px;
+            margin-bottom: 4px;
+            border-radius: 4px;
+            font-size: 11px;
+            line-height: 1.2;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .scroll-hide::-webkit-scrollbar { display: none; }
+        
+        #victory-banner {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            text-align: center;
+            width: 100%;
+            pointer-events: none;
+        }
+
+        .victory-text {
+            font-family: 'Oswald', sans-serif;
+            font-size: 80px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 10px;
+            text-shadow: 0 0 30px rgba(0,0,0,0.8);
+            animation: bannerIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes bannerIn {
+            from { opacity: 0; transform: scale(0.5); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center h-screen w-screen p-2 overflow-hidden bg-[#0b0c10]">
+
+    <div id="victory-banner">
+        <div id="victory-inner" class="victory-text"></div>
+    </div>
+
+    <div id="radio-window" class="fixed left-4 top-32 bottom-24 w-64 bg-black/80 border border-slate-700 rounded-lg flex flex-col z-50 transition-transform duration-300 hidden">
+        <div class="flex border-b border-slate-700 bg-slate-900/50 rounded-t-lg">
+            <button onclick="switchRadio('T')" id="tab-t" class="flex-1 py-2 text-[10px] font-bold text-orange-500 border-b-2 border-orange-500 uppercase tracking-tighter">T Radio</button>
+            <button onclick="switchRadio('CT')" id="tab-ct" class="flex-1 py-2 text-[10px] font-bold text-slate-400 border-b-2 border-transparent uppercase tracking-tighter">CT Radio</button>
+            <button onclick="toggleRadio()" class="p-2 text-slate-500 hover:text-white">✕</button>
+        </div>
+        <div id="radio-content" class="flex-1 overflow-y-auto p-2 scroll-hide space-y-1"></div>
+        <div class="p-2 border-t border-slate-700 text-[9px] text-slate-500 text-center uppercase tracking-widest">Team Communication</div>
+    </div>
+
+    <div id="controls" class="fixed top-4 left-4 flex flex-col gap-2 z-50 hidden">
+        <button id="btn-start" class="bg-orange-600 hover:bg-orange-500 text-white text-xs px-4 py-2 rounded font-bold transition-all uppercase shadow-lg">开始模拟</button>
+        <button id="btn-speed" class="bg-slate-800 hover:bg-slate-700 text-white text-[10px] px-4 py-1.5 rounded border border-slate-600 transition-all">速度: 1x</button>
+        <button onclick="toggleRadio()" class="bg-slate-800 hover:bg-slate-700 px-4 py-1.5 rounded text-[10px] border border-slate-600 text-white">无线电窗</button>
+    </div>
+
+    <div class="fixed top-0 w-full flex justify-center pt-2 z-40 pointer-events-none">
+        <div class="flex items-stretch bg-black/90 border border-slate-700/50 rounded-lg overflow-hidden shadow-2xl pointer-events-auto">
+            <div class="bg-orange-600 px-6 flex flex-col items-center justify-center min-w-[120px]" id="t-score-box">
+                <span class="text-[9px] font-bold opacity-80 uppercase tracking-widest" id="t-team-name">FURIA</span>
+                <span id="score-t" class="text-3xl hud-font font-bold">0</span>
+            </div>
+            <div id="timer-container" class="px-8 py-1 flex flex-col items-center justify-center bg-slate-900 min-w-[140px] transition-colors duration-500">
+                <span id="timer" class="text-2xl font-bold tabular-nums">01:55</span>
+                <div id="defuse-bar-bg" class="hidden w-full h-1 bg-slate-700 mt-1 rounded-full overflow-hidden">
+                    <div id="defuse-bar-fill" class="h-full bg-blue-400" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="bg-blue-600 px-6 flex flex-col items-center justify-center min-w-[120px]" id="ct-score-box">
+                <span class="text-[9px] font-bold opacity-80 uppercase tracking-widest" id="ct-team-name">VITALITY</span>
+                <span id="score-ct" class="text-3xl hud-font font-bold">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="kill-feed" class="fixed top-16 right-4 w-72 flex flex-col items-end z-50 pointer-events-none"></div>
+
+    <div class="relative">
+        <canvas id="gameCanvas" width="1000" height="700" class="rounded-lg shadow-2xl"></canvas>
+    </div>
+
+    <div id="defuse-label" class="fixed top-24 left-1/2 -translate-x-1/2 text-blue-400 font-bold text-sm hidden">正在拆除炸弹...</div>
+
+    <div class="fixed bottom-4 w-full px-8 flex justify-between gap-8 pointer-events-none z-40 hidden">
+        <div id="t-hud" class="flex-1 grid grid-cols-1 gap-2 max-w-[360px]"></div>
+        <div id="ct-hud" class="flex-1 grid grid-cols-1 gap-2 max-w-[360px]"></div>
+    </div>
+
+    <!-- 游戏开始画面 -->
+    <div id="start-screen" class="fixed inset-0 bg-black/90 flex items-center justify-center z-100">
+        <div class="bg-slate-900 border border-slate-700 rounded-lg p-6 w-96">
+            <h1 class="text-2xl font-bold text-center mb-6 text-white">CS2 比赛模拟器</h1>
+            
+            <div class="mb-6">
+                <label class="block text-sm text-slate-400 mb-2">选择 T 方队伍</label>
+                <select id="t-team-select" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm">
+                    <option value="FURIA">FURIA</option>
+                    <option value="Vitality">Vitality</option>
+                    <option value="Falcons">Falcons</option>
+                    <option value="MOUZ">MOUZ</option>
+                    <option value="Spirit">Spirit</option>
+                    <option value="FaZe">FaZe</option>
+                    <option value="Natus Vincere">Natus Vincere</option>
+                    <option value="G2">G2</option>
+                    <option value="The MongolZ">The MongolZ</option>
+                    <option value="custom">自定义</option>
+                </select>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-sm text-slate-400 mb-2">选择 CT 方队伍</label>
+                <select id="ct-team-select" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-white text-sm">
+                    <option value="Vitality">Vitality</option>
+                    <option value="FURIA">FURIA</option>
+                    <option value="Falcons">Falcons</option>
+                    <option value="MOUZ">MOUZ</option>
+                    <option value="Spirit">Spirit</option>
+                    <option value="FaZe">FaZe</option>
+                    <option value="Natus Vincere">Natus Vincere</option>
+                    <option value="G2">G2</option>
+                    <option value="The MongolZ">The MongolZ</option>
+                    <option value="custom">自定义</option>
+                </select>
+            </div>
+            
+            <!-- 自定义队伍选项 -->
+            <div id="custom-options" class="mb-6 hidden">
+                <h3 class="text-sm font-bold text-white mb-3">自定义队伍</h3>
+                
+                <div class="mb-3">
+                    <label class="block text-xs text-slate-400 mb-1">T 方队伍名</label>
+                    <input type="text" id="t-team-name" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-sm" placeholder="输入队伍名">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="block text-xs text-slate-400 mb-1">CT 方队伍名</label>
+                    <input type="text" id="ct-team-name-input" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-sm" placeholder="输入队伍名">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <h4 class="text-xs font-bold text-white mb-2">T 方选手</h4>
+                        <input type="text" id="t-player-1" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs mb-1" placeholder="狙击手">
+                        <input type="text" id="t-player-2" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs mb-1" placeholder="指挥">
+                        <input type="text" id="t-player-3" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs mb-1" placeholder="步枪">
+                        <input type="text" id="t-player-4" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs mb-1" placeholder="步枪">
+                        <input type="text" id="t-player-5" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs" placeholder="步枪">
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-white mb-2">CT 方选手</h4>
+                        <input type="text" id="ct-player-1" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs mb-1" placeholder="狙击手">
+                        <input type="text" id="ct-player-2" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs mb-1" placeholder="指挥">
+                        <input type="text" id="ct-player-3" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs mb-1" placeholder="步枪">
+                        <input type="text" id="ct-player-4" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs mb-1" placeholder="步枪">
+                        <input type="text" id="ct-player-5" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-xs" placeholder="步枪">
+                    </div>
+                </div>
+            </div>
+            
+            <button id="btn-start-game" class="w-full bg-orange-600 hover:bg-orange-500 text-white py-2 rounded font-bold transition-all uppercase shadow-lg">开始游戏</button>
+        </div>
+    </div>
+
+    <div class="fixed bottom-4 w-full px-8 flex justify-between gap-8 pointer-events-none z-40">
+        <div id="t-hud" class="flex-1 grid grid-cols-1 gap-2 max-w-[360px]"></div>
+        <div id="ct-hud" class="flex-1 grid grid-cols-1 gap-2 max-w-[360px]"></div>
+    </div>
+
+    <script>
+        // 预设队伍数据
+        const TEAMS = {
+            'Vitality': { players: ['ZywOo', 'apEX', 'ropz', 'flameZ', 'mezii'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] },
+            'FURIA': { players: ['molodoy', 'FalleN', 'YEKINDAR', 'yuurih', 'KSCERATO'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] },
+            'Falcons': { players: ['m0NESY', 'kyxsan', 'NiKo', 'TeSeS', 'kyousuke'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] },
+            'MOUZ': { players: ['torzsi', 'Brollan', 'Spinx', 'Jimpphat', 'xertioN'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] },
+            'Spirit': { players: ['sh1ro', 'magixx', 'tN1R', 'zont1x', 'donk'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] },
+            'FaZe': { players: ['broky', 'karrigan', 'frozen', 'Twistzz', 'jcobbb'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] },
+            'Natus Vincere': { players: ['w0nderful', 'Aleksib', 'iM', 'b1t', 'makazze'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] },
+            'G2': { players: ['SunPayus', 'huNter-', 'malbsMd', 'HeavyGod', 'MATYS'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] },
+            'The MongolZ': { players: ['910', 'blitz', 'Techno', 'mzinho', 'cobrazera'], roles: ['AWP', 'Rifle', 'Rifle', 'Rifle', 'Rifle'] }
+        };
+        
+        // 显示/隐藏自定义选项
+        document.getElementById('t-team-select').addEventListener('change', function() {
+            const customOptions = document.getElementById('custom-options');
+            const tCustom = this.value === 'custom';
+            const ctCustom = document.getElementById('ct-team-select').value === 'custom';
+            customOptions.style.display = (tCustom || ctCustom) ? 'block' : 'none';
+        });
+        
+        document.getElementById('ct-team-select').addEventListener('change', function() {
+            const customOptions = document.getElementById('custom-options');
+            const ctCustom = this.value === 'custom';
+            const tCustom = document.getElementById('t-team-select').value === 'custom';
+            customOptions.style.display = (tCustom || ctCustom) ? 'block' : 'none';
+        });
+        
+        // 开始游戏按钮
+        document.getElementById('btn-start-game').addEventListener('click', function() {
+            const tTeam = document.getElementById('t-team-select').value;
+            const ctTeam = document.getElementById('ct-team-select').value;
+            
+            // 隐藏开始画面
+            document.getElementById('start-screen').style.display = 'none';
+            
+            // 显示之前隐藏的UI元素
+            document.getElementById('controls').style.display = 'flex';
+            document.getElementById('radio-window').style.display = 'flex';
+            document.querySelector('.fixed.bottom-4').style.display = 'flex';
+            
+            // 初始化游戏
+            initGame(tTeam, ctTeam);
+        });
+        
+        function initGame(tTeam, ctTeam) {
+            let T_NAMES = [];
+            let CT_NAMES = [];
+            
+            // 设置 T 方队伍
+            if (tTeam === 'custom') {
+                const teamName = document.getElementById('t-team-name').value || 'Custom T';
+                T_NAMES = [
+                    {n: document.getElementById('t-player-1').value || 'Sniper', r: 'AWP'},
+                    {n: document.getElementById('t-player-2').value || 'IGL', r: 'Rifle'},
+                    {n: document.getElementById('t-player-3').value || 'Rifle1', r: 'Rifle'},
+                    {n: document.getElementById('t-player-4').value || 'Rifle2', r: 'Rifle'},
+                    {n: document.getElementById('t-player-5').value || 'Rifle3', r: 'Rifle'}
+                ];
+                document.getElementById('t-team-name').innerText = teamName;
+            } else {
+                const team = TEAMS[tTeam];
+                T_NAMES = team.players.map((player, index) => ({n: player, r: team.roles[index]}));
+                document.getElementById('t-team-name').innerText = tTeam;
+            }
+            
+            // 设置 CT 方队伍
+            if (ctTeam === 'custom') {
+                const teamName = document.getElementById('ct-team-name-input').value || 'Custom CT';
+                CT_NAMES = [
+                    {n: document.getElementById('ct-player-1').value || 'Sniper', r: 'AWP'},
+                    {n: document.getElementById('ct-player-2').value || 'IGL', r: 'Rifle'},
+                    {n: document.getElementById('ct-player-3').value || 'Rifle1', r: 'Rifle'},
+                    {n: document.getElementById('ct-player-4').value || 'Rifle2', r: 'Rifle'},
+                    {n: document.getElementById('ct-player-5').value || 'Rifle3', r: 'Rifle'}
+                ];
+                document.getElementById('ct-team-name').innerText = teamName;
+            } else {
+                const team = TEAMS[ctTeam];
+                CT_NAMES = team.players.map((player, index) => ({n: player, r: team.roles[index]}));
+                document.getElementById('ct-team-name').innerText = ctTeam;
+            }
+            
+            // 初始化回合
+            initRoundWithTeams(T_NAMES, CT_NAMES);
+        }
+        
+        function initRoundWithTeams(tNames, ctNames) {
+            // 这里将在原有initRound函数中使用tNames和ctNames
+            window.T_NAMES = tNames;
+            window.CT_NAMES = ctNames;
+            initRound();
+        }
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const MAP_NODES = {
+            'b点': { x: 100, y: 150, links: ['b2', '狗洞', 'b门'], type: 'site', isOnFire: false },
+            'b2': { x: 100, y: 350, links: ['b点', '后花园', 'b1'], isOnFire: false },
+            '狗洞': { x: 250, y: 100, links: ['b点', '沙地'], isOnFire: false },
+            'b门': { x: 250, y: 220, links: ['b点', '沙地'], isOnFire: false },
+            '沙地': { x: 450, y: 180, links: ['狗洞', 'b门', '中门', '警家'], isOnFire: false },
+            '后花园': { x: 100, y: 550, links: ['b2', '匪家', '匪口'], isOnFire: false },
+            'b1': { x: 250, y: 350, links: ['b2', '中路'], isOnFire: false },
+            '中门': { x: 450, y: 300, links: ['沙地', '中路'], isOnFire: false },
+            '中路': { x: 450, y: 450, links: ['b1', '中门', '中远', '暗道'], isOnFire: false },
+            '中远': { x: 520, y: 550, links: ['中路', 'a小下', '暗道', '匪口'], isOnFire: false },
+            '警家': { x: 650, y: 250, links: ['沙地', 'a小上', 'a大'], type: 'spawn', isOnFire: false },
+            'a小下': { x: 650, y: 450, links: ['中远', 'a小上'], isOnFire: false },
+            'a小上': { x: 650, y: 350, links: ['a小下', '警家', 'a点'], isOnFire: false },
+            '暗道': { x: 350, y: 550, links: ['匪家', '中远', '中路'], isOnFire: false },
+            '匪口': { x: 600, y: 600, links: ['中远', 'a门', '后花园', '匪家'], isOnFire: false },
+            '匪家': { x: 350, y: 650, links: ['后花园', '暗道', '匪口'], type: 'spawn', isOnFire: false },
+            'a门': { x: 750, y: 600, links: ['匪口', 'a门外'], isOnFire: false },
+            'a门外': { x: 880, y: 600, links: ['a门', 'a大'], isOnFire: false },
+            'a大': { x: 880, y: 350, links: ['a门外', '警家', 'a点'], isOnFire: false },
+            'a点': { x: 800, y: 150, links: ['a小上', 'a大'], type: 'site', isOnFire: false }
+        };
+
+        const WEAPONS = {
+            'AK-47': { cd: 110, ammo: 30, reload: 2500, price: 2700, isMain: true, damage: 35, headDamage: 70 },
+            'M4A1-S': { cd: 100, ammo: 20, reload: 2500, price: 2900, isMain: true, damage: 30, headDamage: 60 },
+            'Glock-18': { cd: 300, ammo: 20, reload: 2000, price: 200, isMain: false, damage: 30, headDamage: 90 },
+            'USP-S': { cd: 350, ammo: 12, reload: 2000, price: 200, isMain: false, damage: 30, headDamage: 100 },
+            'FN57': { cd: 300, ammo: 20, reload: 2000, price: 500, isMain: false, damage: 30, headDamage: 200,视野缩短: true }, // CT手枪
+            'Tec-9': { cd: 200, ammo: 18, reload: 2000, price: 500, isMain: false, damage: 40, headDamage: 200,视野缩短: true }, // T手枪
+            'Deagle': { cd: 500, ammo: 7, reload: 2000, price: 700, isMain: false, damage: 60, headDamage: 200 }, // 通用手枪
+            'AWP': { cd: 1500, ammo: 5, reload: 4000, price: 4750, isMain: true, damage: 100, headDamage: 200 },
+            'MAC-10': { cd: 150, ammo: 30, reload: 2500, price: 1050, isMain: true, damage: 20, headDamage: 40 }, // T方冲锋枪
+            'MP9': { cd: 100, ammo: 30, reload: 2500, price: 1200, isMain: true, damage: 20, headDamage: 50 } // CT方冲锋枪
+        };
+
+        // 武器音效管理
+        const WeaponSounds = {
+            sounds: {},
+            
+            init: function() {
+                // 预加载武器音效
+                this.sounds['AK-47'] = this.createAudio('sounds/ak47.mp3');
+                this.sounds['M4A1-S'] = this.createAudio('sounds/m4a1.mp3');
+                this.sounds['Glock-18'] = this.createAudio('sounds/glock.mp3');
+                this.sounds['USP-S'] = this.createAudio('sounds/usp.mp3');
+                this.sounds['FN57'] = this.createAudio('sounds/fn57.wav');
+                this.sounds['Tec-9'] = this.createAudio('sounds/tec9.wav');
+                this.sounds['Deagle'] = this.createAudio('sounds/deagle.wav');
+                this.sounds['AWP'] = this.createAudio('sounds/awp.mp3');
+                this.sounds['MAC-10'] = this.createAudio('sounds/mac10.mp3');
+                this.sounds['MP9'] = this.createAudio('sounds/mp9.mp3');
+                
+                // 预加载其他音效
+                this.sounds['t_win'] = this.createAudio('sounds/terwin.wav');
+                this.sounds['ct_win'] = this.createAudio('sounds/ctwin.wav');
+                this.sounds['bomb_plant'] = this.createAudio('sounds/bombpl.wav');
+                this.sounds['bomb_defuse'] = this.createAudio('sounds/bombdef.wav');
+                this.sounds['flash_explode'] = this.createAudio('sounds/flashbang_explode2_distant.wav');
+                this.sounds['smoke_explode'] = this.createAudio('sounds/sg_explode_distant.wav');
+                this.sounds['grenade_explode'] = this.createAudio('sounds/nade_explode.wav');
+                
+                // 预加载炸弹相关音效
+                this.sounds['c4_beep'] = this.createAudio('sounds/c4_beep2.wav');
+                this.sounds['c4_initiate'] = this.createAudio('sounds/c4_initiate.wav');
+                this.sounds['c4_disarmstart'] = this.createAudio('sounds/c4_disarmstart.wav');
+                
+                // 预加载其他音效
+                this.sounds['round_start'] = this.createAudio('sounds/tstart.mp3');
+                this.sounds['molotov_explode'] = this.createAudio('sounds/molotov_detonate_1_distant.wav');
+                this.sounds['hegrenade_explode'] = this.createAudio('sounds/hegrenade.wav');
+                this.sounds['c4_explode'] = this.createAudio('sounds/explode4.wav');
+                this.sounds['reload'] = this.createAudio('sounds/reload.mp3');
+            },
+            
+            createAudio: function(url) {
+                const audio = new Audio(url);
+                audio.preload = 'auto';
+                return audio;
+            },
+            
+            play: function(sound) {
+                if (this.sounds[sound]) {
+                    const audio = this.sounds[sound].cloneNode();
+                    // 手雷音量变为原来的一半
+                    if (sound === 'hegrenade_explode') {
+                        audio.volume = 0.05; // 音量修改为0.05
+                    } else {
+                        audio.volume = 0.1; // 其他音效音量保持0.1
+                    }
+                    audio.play().catch(e => console.log('Audio play failed:', e));
+                }
+            }
+        };
+
+        // 初始化音效
+        WeaponSounds.init();
+
+        const UTILITY_PRICES = { smoke: 300, fire: 400, flash: 200, nade: 300 };
+
+        function findPath(start, end) {
+            let queue = [[start]], visited = new Set([start]);
+            while (queue.length > 0) {
+                let path = queue.shift();
+                let last = path[path.length - 1];
+                if (last === end) return path;
+                for (let neighbor of MAP_NODES[last].links) {
+                    if (!visited.has(neighbor)) { visited.add(neighbor); queue.push([...path, neighbor]); }
+                }
+            }
+            return [start];
+        }
+
+        let state = {
+            running: false, speed: 1, time: 115, score: {t:0, ct:0}, round: 1,
+            players: [], tracers: [], smokes: [], flashes: [], molotovs: [], grenades: [], droppedWeapons: [],
+            bomb: { state: 'idle', carrier: null, x: 0, y: 0, node: null, time: 40, defuser: null, defuseProgress: 0, planter: null },
+            lastTick: 0, radioView: 'T', radioHistory: { T: [], CT: [] },
+            isRoundEnded: false,
+            lastTacticCheck: 0,
+            lastSmokeCheck: 0,
+            lastRetakeFlashCheck: 0,
+            consecutiveLosses: { T: 0, CT: 0 },
+            isSwapped: false,
+            winTarget: 13,
+            hasReleasedStartMolotov: false, // 标记是否已经发布了开局燃烧瓶指令
+            hasReleasedCTB2Fire: false, // 标记是否已经发布了CT开局b2火指令
+            hasReleasedStartNade: false, // 标记是否已经发布了T方开局丢雷指令
+            lastAttackMolotovTime: { a: 0, b: 0 }, // 进攻a/b点扔火指令的冷却时间
+            lastNadeTime: 0 // 上次投掷手雷的时间
+        };
+
+        class DroppedWeapon {
+            constructor(name, x, y) {
+                this.name = name;
+                this.x = x;
+                this.y = y;
+            }
+            draw(ctx) {
+                ctx.fillStyle = 'black';
+                const textWidth = ctx.measureText(this.name).width + 10;
+                ctx.fillRect(this.x - textWidth/2, this.y - 8, textWidth, 16);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(this.x - textWidth/2, this.y - 8, textWidth, 16);
+                ctx.fillStyle = 'white';
+                ctx.font = '10px Roboto Mono';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.name, this.x, this.y + 4);
+            }
+        }
+
+        class Smoke {
+            constructor(team, startX, startY, targetNode, instant = false) {
+                this.team = team;
+                this.startX = startX;
+                this.startY = startY;
+                const target = MAP_NODES[targetNode];
+                this.targetX = target.x; this.targetY = target.y;
+                this.targetNode = targetNode;
+                this.isFlying = !instant;
+                this.progress = instant ? 1 : 0;
+                this.duration = 18; 
+                this.life = this.duration;
+                this.radius = 45;
+                this.baseColor = team === 'CT' ? 'rgba(100, 150, 255, 0.6)' : 'rgba(255, 150, 50, 0.6)';
+                this.color = this.baseColor;
+                this.seedX = Math.random() * 100;
+                this.seedY = Math.random() * 100;
+                this.grenadeEffect = 0; // 手雷影响时间，0表示无影响
+                this.grenadeEffectMax = 3; // 手雷影响最大时间
+                
+                // 如果是立即爆开，直接设置到目标位置并播放音效
+                if (instant) {
+                    this.x = this.targetX;
+                    this.y = this.targetY;
+                    WeaponSounds.play('smoke_explode');
+                } else {
+                    this.x = startX;
+                    this.y = startY;
+                }
+            }
+            update(dt) {
+                if (this.isFlying) {
+                    this.progress += dt * 0.45;
+                    if (this.progress >= 1) {
+                        this.progress = 1;
+                        this.isFlying = false;
+                        this.x = this.targetX;
+                        this.y = this.targetY;
+                        WeaponSounds.play('smoke_explode');
+                    } else {
+                        this.x = this.startX + (this.targetX - this.startX) * this.progress;
+                        this.y = this.startY + (this.targetY - this.startY) * this.progress;
+                    }
+                } else {
+                    this.life -= dt;
+                    
+                    // 处理手雷影响
+                    if (this.grenadeEffect > 0) {
+                        this.grenadeEffect -= dt;
+                        if (this.grenadeEffect < 0) this.grenadeEffect = 0;
+                        
+                        // 计算透明度：先变大后变小
+                        const normalizedTime = this.grenadeEffect / this.grenadeEffectMax;
+                        let alpha;
+                        if (normalizedTime > 0.5) {
+                            // 前1.5秒透明度变大
+                            alpha = 0.6 + (1.0 - 0.6) * (1 - (normalizedTime - 0.5) * 2);
+                        } else {
+                            // 后1.5秒透明度变小
+                            alpha = 0.6 + (1.0 - 0.6) * (normalizedTime * 2);
+                        }
+                        
+                        // 更新颜色透明度
+                        const colorMatch = this.baseColor.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*(.*?)\)/);
+                        if (colorMatch) {
+                            const r = colorMatch[1];
+                            const g = colorMatch[2];
+                            const b = colorMatch[3];
+                            this.color = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                        }
+                    } else if (this.color !== this.baseColor) {
+                        // 恢复基础颜色
+                        this.color = this.baseColor;
+                    }
+                }
+            }
+            draw(ctx) {
+                if (this.isFlying) {
+                    ctx.fillStyle = this.color;
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    const pulse = 1 + Math.sin(this.progress * Math.PI) * 0.5;
+                    ctx.fillRect(-3 * pulse, -3 * pulse, 6 * pulse, 6 * pulse);
+                    ctx.restore();
+                } else {
+                    ctx.save();
+                    ctx.fillStyle = this.color;
+                    const time = Date.now() * 0.001; 
+                    const range = 6;         
+                    const offsetX1 = Math.sin(time * 1.2 + this.seedX) * range;
+                    const offsetY1 = Math.cos(time * 1.2 + this.seedY) * range;
+                    ctx.beginPath();
+                    ctx.arc(this.x + offsetX1, this.y + offsetY1, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        }
+
+        class Flash {
+            constructor(team, startX, startY, targetNode) {
+                this.team = team;
+                this.startX = startX; this.startY = startY;
+                this.x = startX; this.y = startY;
+                const target = MAP_NODES[targetNode];
+                this.targetX = target.x; this.targetY = target.y;
+                this.targetNode = targetNode;
+                this.isFlying = true;
+                this.progress = 0;
+                this.exploded = false;
+                this.flashLife = 0; 
+            }
+            update(dt) {
+                if (this.isFlying) {
+                    this.progress += dt * 0.8; 
+                    if (this.progress >= 1) {
+                        this.progress = 1;
+                        this.isFlying = false;
+                        this.explode();
+                    }
+                    this.x = this.startX + (this.targetX - this.startX) * this.progress;
+                    this.y = this.startY + (this.targetY - this.startY) * this.progress;
+                } else if (this.exploded) {
+                    this.flashLife -= dt * 2;
+                }
+            }
+            explode() {
+                this.exploded = true;
+                this.flashLife = 1.0;
+                WeaponSounds.play('flash_explode');
+                state.players.forEach(p => {
+                    if (p.isAlive) {
+                        const dist = Math.sqrt((p.x - this.x)**2 + (p.y - this.y)**2);
+                        if (dist < 150) p.blind(4); 
+                    }
+                });
+            
+            // 绘制手雷和爆炸特效在最顶层
+            if (state.grenades) {
+                state.grenades.forEach(g => g.draw(ctx));
+            }
+        }
+            draw(ctx) {
+                if (this.isFlying) {
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(this.x - 4, this.y - 2, 8, 4);
+                } else if (this.exploded && this.flashLife > 0) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.flashLife})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 100 * (1.5 - this.flashLife), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        class Molotov {
+            constructor(team, thrower, startX, startY, targetNode) {
+                this.team = team;
+                this.thrower = thrower;
+                this.startX = startX; this.startY = startY;
+                this.x = startX; this.y = startY;
+                const target = MAP_NODES[targetNode];
+                this.targetX = target.x; this.targetY = target.y;
+                this.targetNode = targetNode;
+                this.isFlying = true;
+                this.progress = 0;
+                this.exploded = false;
+                this.life = 5; // 燃烧瓶持续5秒
+                this.lastDamage = 0; // 上次造成伤害的时间
+                this.radius = 60; // 燃烧范围
+            }
+            update(dt) {
+                if (this.isFlying) {
+                    this.progress += dt * 0.6; // 燃烧瓶飞行速度
+                    if (this.progress >= 1) {
+                        this.progress = 1;
+                        this.isFlying = false;
+                        this.explode();
+                    }
+                    this.x = this.startX + (this.targetX - this.startX) * this.progress;
+                    this.y = this.startY + (this.targetY - this.startY) * this.progress;
+                } else if (this.exploded) {
+                    // 检查是否在烟雾中，如果在烟雾中会被熄灭
+                    const inSmoke = state.smokes.some(s => {
+                        if (s.isFlying) return false;
+                        const dist = Math.sqrt((this.x - s.x)**2 + (this.y - s.y)**2);
+                        return dist < s.radius;
+                    });
+                    
+                    if (inSmoke) {
+                        this.life = -1; // 立即熄灭
+                        // 将目标区块标记为非着火状态
+                        if (this.targetNode && MAP_NODES[this.targetNode]) {
+                            MAP_NODES[this.targetNode].isOnFire = false;
+                        }
+                        return;
+                    }
+                    
+                    this.life -= dt;
+                    
+                    // 每0.1秒造成伤害
+                    this.lastDamage += dt;
+                    if (this.lastDamage >= 0.1) {
+                        this.lastDamage = 0;
+                        this.dealDamage();
+                    }
+                    
+                    // 当燃烧瓶熄灭时，将对应区块的着火状态设置为false
+                    if (this.life <= 0 && this.exploded) {
+                        if (this.targetNode && MAP_NODES[this.targetNode]) {
+                            MAP_NODES[this.targetNode].isOnFire = false;
+                        }
+                    }
+                }
+            }
+            explode() {
+                this.exploded = true;
+                WeaponSounds.play('molotov_explode');
+                
+                // 将目标区块标记为着火状态
+                if (this.targetNode && MAP_NODES[this.targetNode]) {
+                    MAP_NODES[this.targetNode].isOnFire = true;
+                }
+            }
+            dealDamage() {
+                state.players.forEach(p => {
+                    if (p.isAlive) {
+                        const dist = Math.sqrt((p.x - this.x)**2 + (p.y - this.y)**2);
+                        if (dist < this.radius) {
+                            p.hp -= 2; // 燃烧瓶伤害提高到原来的两倍
+                            p.hitFlash = 1.0;
+                            p.isOnFire = true; // 标记玩家正在受到燃烧伤害
+                            p.lastFireCheck = 0; // 重置燃烧伤害检查计时器
+                            
+                            // 检查是否死亡
+                            if (p.hp <= 0) {
+                                p.hp = 0;
+                                p.isAlive = false;
+                                p.deaths++;
+                                
+                                if (WEAPONS[p.weapon].isMain) {
+                                    state.droppedWeapons.push(new DroppedWeapon(p.weapon, p.x, p.y));
+                                }
+
+                                if (p.isPlanting) { 
+                                    state.bomb.state = 'idle'; 
+                                    state.bomb.carrier = null; 
+                                    state.bomb.x = p.x; 
+                                    state.bomb.y = p.y; 
+                                    state.bomb.node = p.posNode; 
+                                    p.hasBomb = false; 
+                                }
+                                if (p.hasBomb) { 
+                                    state.bomb.carrier = null; 
+                                    state.bomb.x = p.x; 
+                                    state.bomb.y = p.y; 
+                                    state.bomb.node = p.posNode; 
+                                    p.hasBomb = false; 
+                                }
+                                if (state.bomb.defuser === p) { 
+                                    state.bomb.defuser = null; 
+                                    state.bomb.defuseProgress = 0; 
+                                    document.getElementById('defuse-bar-bg').classList.add('hidden'); 
+                                }
+                                
+                                // 添加燃烧瓶击杀反馈
+                                if (this.thrower === p) {
+                                    // 踩到自己丢的火
+                                    addKillFeed(p, p, '☠️', false);
+                                } else {
+                                    // 踩到敌人或队友丢的火
+                                    if (this.thrower) {
+                                        addKillFeed(this.thrower, p, '🔥', false);
+                                    } else {
+                                        // 如果找不到投掷者，显示环境伤害
+                                        addKillFeed({ name: '🔥', team: this.team }, p, '🔥', false);
+                                    }
+                                }
+                                checkRoundEnd();
+                                return; // 跳过后续逻辑
+                            }
+                            
+                            // 新的踩火行为逻辑
+                            if (!p.isHitReacting && !p.isEscapingFire) {
+                                p.isHitReacting = true;
+                                p.isEscapingFire = true; // 标记玩家正在执行踩火逃离任务
+                                
+                                // 移动到当前节点links的第一个目标
+                                const currentNode = p.posNode;
+                                const currentMapNode = MAP_NODES[currentNode];
+                                
+                                if (currentMapNode && currentMapNode.links && currentMapNode.links.length > 0) {
+                                    // 直接选择第一个相邻节点作为逃离目标
+                                    const firstExit = currentMapNode.links[0];
+                                    p.destination = firstExit;
+                                    p.path = findPath(currentNode, firstExit);
+                                    p.pathIdx = 0;
+                                    p.broadcastRadio(`正在逃离火焰，前往 ${firstExit}！`);
+                                    // 当玩家到达目标地点时，会在moveAlongPath中自动重置isEscapingFire
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            draw(ctx) {
+                if (this.isFlying) {
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect(this.x - 3, this.y - 3, 6, 6);
+                } else if (this.exploded && this.life > 0) {
+                    // 绘制燃烧范围
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 绘制火焰特效
+                    const pulse = 1 + Math.sin(Date.now() * 0.01) * 0.2;
+                    ctx.fillStyle = 'rgba(255, 100, 0, 0.6)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius * 0.8 * pulse, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+        }
+
+        class Grenade {
+            constructor(team, thrower, startX, startY, targetX, targetY) {
+                this.team = team;
+                this.thrower = thrower;
+                this.startX = startX; this.startY = startY;
+                this.x = startX; this.y = startY;
+                this.targetX = targetX; this.targetY = targetY;
+                this.direction = Math.atan2(targetY - startY, targetX - startX);
+                this.isFlying = true;
+                this.exploded = false;
+                this.radius = 80; // 爆炸范围改为原来的一半
+                this.damage = 50; // 基础伤害
+                this.explosionTime = 0; // 爆炸时间，用于闪光效果
+                this.flightTime = 0; // 飞行时间，用于2秒后爆炸
+            }
+            update(dt) {
+                if (this.isFlying) {
+                    // 向前飞行，速度变为原来的1/4
+                    const speed = 250 * dt;
+                    this.x += Math.cos(this.direction) * speed;
+                    this.y += Math.sin(this.direction) * speed;
+                    
+                    // 更新飞行时间
+                    this.flightTime += dt;
+                    
+                    // 检查是否到达目标点位或飞行时间超过2秒
+                    const distToTarget = Math.sqrt((this.x - this.targetX)**2 + (this.y - this.targetY)**2);
+                    if (distToTarget < 20 || this.flightTime > 2) {
+                        this.isFlying = false;
+                        this.explode();
+                    }
+                } else if (this.exploded) {
+                    this.explosionTime += dt;
+                }
+            }
+            explode() {
+                this.exploded = true;
+                this.explosionTime = 0;
+                WeaponSounds.play('hegrenade_explode');
+                this.dealDamage();
+                
+                // 影响周围的烟雾
+                state.smokes.forEach(smoke => {
+                    if (!smoke.isFlying) {
+                        const dist = Math.sqrt((this.x - smoke.x)**2 + (this.y - smoke.y)**2);
+                        if (dist < this.radius) {
+                            smoke.grenadeEffect = smoke.grenadeEffectMax;
+                        }
+                    }
+                });
+            }
+            dealDamage() {
+                state.players.forEach(p => {
+                    if (p.isAlive) {
+                        const dist = Math.sqrt((p.x - this.x)**2 + (p.y - this.y)**2);
+                        if (dist < this.radius) {
+                            // 计算伤害：100-距爆炸点距离（如果是负数则忽略）
+                            let damage = Math.max(0, 100 - dist);
+                            
+                            // 如果穿着护甲，伤害减半
+                            if (p.armorType !== '空') {
+                                damage *= 0.5;
+                            }
+                            
+                            if (damage > 0) {
+                                p.hp -= damage;
+                                p.hitFlash = 1.0;
+                                
+                                // 检查是否死亡
+                                if (p.hp <= 0) {
+                                    p.hp = 0;
+                                    p.isAlive = false;
+                                    p.deaths++;
+                                    
+                                    if (WEAPONS[p.weapon].isMain) {
+                                        state.droppedWeapons.push(new DroppedWeapon(p.weapon, p.x, p.y));
+                                    }
+
+                                    if (p.isPlanting) { 
+                                        state.bomb.state = 'idle'; 
+                                        state.bomb.carrier = null; 
+                                        state.bomb.x = p.x; 
+                                        state.bomb.y = p.y; 
+                                        state.bomb.node = p.posNode; 
+                                        p.hasBomb = false; 
+                                    }
+                                    if (p.hasBomb) { 
+                                        state.bomb.carrier = null; 
+                                        state.bomb.x = p.x; 
+                                        state.bomb.y = p.y; 
+                                        state.bomb.node = p.posNode; 
+                                        p.hasBomb = false; 
+                                    }
+                                    if (state.bomb.defuser === p) { 
+                                        state.bomb.defuser = null; 
+                                        state.bomb.defuseProgress = 0; 
+                                        document.getElementById('defuse-bar-bg').classList.add('hidden'); 
+                                    }
+                                    
+                                    // 添加手雷击杀反馈
+                                    if (this.thrower === p) {
+                                        // 炸死自己
+                                        addKillFeed(p, p, '☠️', false);
+                                    } else {
+                                        // 炸死敌人或队友
+                                        if (this.thrower) {
+                                            addKillFeed(this.thrower, p, '💣', false);
+                                        } else {
+                                            // 如果找不到投掷者，显示环境伤害
+                                            addKillFeed({ name: '💣', team: this.team }, p, '💣', false);
+                                        }
+                                    }
+                                    checkRoundEnd();
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            draw(ctx) {
+                if (this.isFlying) {
+                    // 绘制绿色圆形手雷，大小改为原来的一半
+                    ctx.save();
+                    ctx.fillStyle = 'green';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.restore();
+                } else if (this.exploded && this.explosionTime < 1) {
+                    // 绘制爆炸特效：黄色圆形闪光，在最顶层
+                    ctx.save();
+                    
+                    // 闪光效果：随时间变化的透明度和大小
+                    const alpha = 1 - this.explosionTime;
+                    const size = 50 + this.explosionTime * 25;
+                    
+                    // 绘制黄色闪光
+                    ctx.fillStyle = `rgba(255, 200, 0, ${alpha * 0.9})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 绘制白色高光
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, size * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 绘制外层光晕
+                    ctx.strokeStyle = `rgba(255, 255, 150, ${alpha * 0.7})`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, size * 1.2, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    ctx.restore();
+                }
+            }
+        }
+
+        class Player {
+            constructor(team, config, idx) {
+                this.team = team; this.name = config.n; this.role = config.r;
+                this.id = ''; // 选手ID初始值为空
+                this.hp = 100; this.kills = 0; this.deaths = 0;
+                this.isAlive = true; this.hasBomb = false;
+                this.angle = 0; this.targetAngle = 0;
+                this.viewDistance = 250; this.viewAngle = 35 * (Math.PI / 180);
+                this.lastShot = 0; this.aimingAt = null;
+                this.isReloading = false; this.reloadStart = 0;
+                this.hitFlash = 0;
+                this.isPlanting = false;
+                this.hasKit = false; 
+                this.defuseCooldown = 0;
+                this.isHitReacting = false; // 受击反应标志
+                this.isMoving = false; // 跟踪玩家是否在移动状态
+                this.isDefending = false; // 跟踪玩家是否在防守状态
+                this.isOnFire = false; // 跟踪玩家是否正在受到燃烧伤害
+                this.lastFireCheck = 0; // 上次检查燃烧伤害的时间
+                this.isEscapingFire = false; // 跟踪玩家是否正在执行踩火逃离任务
+                
+                this.money = 800; 
+                this.armorType = '空';
+                this.utility = { smoke: 0, fire: 0, flash: 0, nade: 0 }; 
+
+                this.strafeMode = Math.random() > 0.5 ? 'strafe' : 'stationary';
+                this.strafeDir = 1; this.strafeTimer = 0;
+                this.idleWatchTimer = 1 + Math.random() * 9;
+                this.helpRequested = false;
+                this.tempTarget = null;
+                this.smokeWaitTimer = 0;
+                this.isStuckInSmoke = false;
+                this.blindTimer = 0;
+
+                this.weapon = this.team === 'T' ? 'Glock-18' : 'USP-S';
+                this.ammo = WEAPONS[this.weapon].ammo;
+                const spawn = team === 'T' ? '匪家' : '警家';
+                this.x = MAP_NODES[spawn].x + (idx % 5 - 2) * 25;
+                this.y = MAP_NODES[spawn].y + (Math.random() - 0.5) * 20;
+                this.posNode = spawn;
+                this.setTactics(idx);
+            }
+
+            blind(duration) {
+                this.blindTimer = duration;
+                if (state.bomb.defuser === this) {
+                    state.bomb.defuser = null;
+                    state.bomb.defuseProgress = 0;
+                    document.getElementById('defuse-bar-bg').classList.add('hidden');
+                }
+            }
+
+            buy(strategy = 'Full', isHero = false) {
+                // 修改点 1：手枪局指挥官策略 (5-0, 4-1, 3-2)
+                if (state.round === 1 || state.round === 13) {
+                    this.weapon = this.team === 'T' ? 'Glock-18' : 'USP-S';
+                    this.ammo = WEAPONS[this.weapon].ammo;
+                    this.armorType = '空';
+                    this.utility = { smoke: 0, fire: 0, flash: 0, nade: 0 };
+                    this.hasKit = false;
+
+                    const pistolStrats = ['5-0', '4-1', '3-2'];
+                    // 基于回合随机选一个策略，或者让两个队伍选不同的
+                    const stratKey = (this.team === 'T') ? state.round % 3 : (state.round + 1) % 3;
+                    const roundStrat = pistolStrats[stratKey];
+                    const armorNeeded = parseInt(roundStrat.split('-')[0]);
+                    
+                    // 获取当前选手在队伍里的索引 (0-4)
+                    const teamIdx = state.players.filter(p => p.team === this.team).indexOf(this);
+
+                    if (teamIdx < armorNeeded) {
+                        // 属于买甲的那部分人
+                        this.armorType = '护甲';
+                        this.money -= 650;
+                    } else {
+                        // 属于买道具的那部分人 (根据剩余钱买烟和闪)
+                        this.utility.smoke = 1;
+                        this.utility.flash = 1;
+                        this.money -= 500;
+                        if (this.team === 'CT' && this.money >= 400 && Math.random() > 0.5) {
+                            this.hasKit = true;
+                            this.money -= 400;
+                        }
+                    }
+                    return;
+                }
+
+                if (strategy === 'Eco') return; 
+                if (strategy === 'Hero' && !isHero) return;
+
+                const currentIsPistol = !WEAPONS[this.weapon].isMain;
+                
+                // 强起策略下的购买优先级：护甲、主武器、道具、钳子
+                if (strategy === 'Force') {
+                    // 1. 护甲购买：T方100%购买护甲+头盔，CT50%购买护甲，50%概率购买护甲+头盔
+                    if (this.armorType === '空') {
+                        if (this.team === 'T') {
+                            // T方100%购买护甲+头盔
+                            if (this.money >= 1000) {
+                                this.armorType = '护甲+头盔';
+                                this.money -= 1000;
+                            }
+                        } else {
+                            // CT方50%购买护甲，50%概率购买护甲+头盔
+                            const rand = Math.random();
+                            if (rand < 0.5) {
+                                // 50%购买护甲
+                                if (this.money >= 650) {
+                                    this.armorType = '护甲';
+                                    this.money -= 650;
+                                }
+                            } else {
+                                // 50%购买护甲+头盔
+                                if (this.money >= 1000) {
+                                    this.armorType = '护甲+头盔';
+                                    this.money -= 1000;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 2. 主武器购买：对于狙击手，AWP优先级最大；正常优先级：ak47/m4a1>mac-10/mp9
+                    if (currentIsPistol) {
+                        // 狙击手优先购买AWP
+                        if (this.role === 'AWP' && this.money >= WEAPONS['AWP'].price) {
+                            this.weapon = 'AWP';
+                            this.money -= WEAPONS['AWP'].price;
+                            this.ammo = WEAPONS[this.weapon].ammo;
+                        } else if (this.money >= 2900) {
+                            // 有钱的话优先购买长枪
+                            const price = this.team === 'T' ? 2700 : 2900;
+                            if (this.money >= price) {
+                                this.weapon = this.team === 'T' ? 'AK-47' : 'M4A1-S';
+                                this.money -= price;
+                                this.ammo = WEAPONS[this.weapon].ammo;
+                            }
+                        } else if (this.team === 'T' && this.money >= WEAPONS['MAC-10'].price) {
+                            // T方强起购买MAC-10
+                            this.weapon = 'MAC-10';
+                            this.money -= WEAPONS['MAC-10'].price;
+                            this.ammo = WEAPONS[this.weapon].ammo;
+                        } else if (this.team === 'CT' && this.money >= WEAPONS['MP9'].price) {
+                            // CT方强起购买MP9
+                            this.weapon = 'MP9';
+                            this.money -= WEAPONS['MP9'].price;
+                            this.ammo = WEAPONS[this.weapon].ammo;
+                        }
+                    }
+                    
+                    // 3. 道具购买
+                    const buyOrder = ['smoke', 'fire', 'flash', 'nade', 'flash'];
+                    for (let item of buyOrder) {
+                        if (this.money < 300) break;
+                        let totalUtil = Object.values(this.utility).reduce((a,b)=>a+b, 0);
+                        if (totalUtil >= 4) break;
+                        let limit = (item === 'flash') ? 2 : 1;
+                        if (this.utility[item] < limit && this.money >= UTILITY_PRICES[item]) {
+                            this.utility[item]++;
+                            this.money -= UTILITY_PRICES[item];
+                        }
+                    }
+                    
+                    // 4. 钳子购买（对于CT方而言）
+                    if (this.team === 'CT' && !this.hasKit && this.money >= 400) {
+                        this.hasKit = true;
+                        this.money -= 400;
+                    }
+                } else {
+                    // 非强起策略
+                    if (currentIsPistol) {
+                        // 全起局发枪求助逻辑
+                    if (strategy === 'Full') {
+                        // 狙击手购买AWP的逻辑
+                        if (this.role === 'AWP') {
+                            if (this.money >= WEAPONS['AWP'].price) {
+                                this.weapon = 'AWP'; 
+                                this.money -= WEAPONS['AWP'].price;
+                                this.ammo = WEAPONS[this.weapon].ammo;
+                            } else {
+                                // 发送电报求助购买AWP
+                                this.broadcastRadio(`需要AWP！请求支援！`);
+                                // 找到换算余额大于9000且能支付AWP的玩家
+                                const teamPlayers = state.players.filter(p => p.team === this.team && p !== this);
+                                const potentialHelpers = teamPlayers.filter(p => {
+                                    return p.getConvertedBalance() > 9000 && p.money >= WEAPONS['AWP'].price;
+                                });
+                                
+                                if (potentialHelpers.length > 0) {
+                                    // 选择第一个符合条件的玩家
+                                    const helper = potentialHelpers[0];
+                                    helper.money -= WEAPONS['AWP'].price;
+                                    this.weapon = 'AWP';
+                                    this.ammo = WEAPONS[this.weapon].ammo;
+                                    this.broadcastRadio(`感谢 ${helper.name} 提供AWP！`);
+                                    helper.broadcastRadio(`已为 ${this.name} 购买AWP`);
+                                } else {
+                                    // 没有能提供AWP的玩家，按照步枪手求助逻辑
+                                    this.broadcastRadio(`需要步枪！请求支援！`);
+                                    const rifleHelpers = teamPlayers.filter(p => {
+                                        return p.getConvertedBalance() > 7000 && p.money >= (this.team === 'T' ? WEAPONS['AK-47'].price : WEAPONS['M4A1-S'].price);
+                                    });
+                                    
+                                    if (rifleHelpers.length > 0) {
+                                        const helper = rifleHelpers[0];
+                                        const riflePrice = this.team === 'T' ? WEAPONS['AK-47'].price : WEAPONS['M4A1-S'].price;
+                                        helper.money -= riflePrice;
+                                        this.weapon = this.team === 'T' ? 'AK-47' : 'M4A1-S';
+                                        this.ammo = WEAPONS[this.weapon].ammo;
+                                        this.broadcastRadio(`感谢 ${helper.name} 提供步枪！`);
+                                        helper.broadcastRadio(`已为 ${this.name} 购买步枪`);
+                                    }
+                                }
+                            }
+                        } else {
+                            // 步枪手购买步枪的逻辑
+                            const riflePrice = this.team === 'T' ? WEAPONS['AK-47'].price : WEAPONS['M4A1-S'].price;
+                            if (this.money >= riflePrice) {
+                                this.weapon = this.team === 'T' ? 'AK-47' : 'M4A1-S';
+                                this.money -= riflePrice;
+                                this.ammo = WEAPONS[this.weapon].ammo;
+                            } else {
+                                // 发送电报求助购买步枪
+                                this.broadcastRadio(`需要步枪！请求支援！`);
+                                // 找到换算余额大于7000且能支付步枪的玩家
+                                const teamPlayers = state.players.filter(p => p.team === this.team && p !== this);
+                                const potentialHelpers = teamPlayers.filter(p => {
+                                    return p.getConvertedBalance() > 7000 && p.money >= riflePrice;
+                                });
+                                
+                                if (potentialHelpers.length > 0) {
+                                    // 选择第一个符合条件的玩家
+                                    const helper = potentialHelpers[0];
+                                    helper.money -= riflePrice;
+                                    this.weapon = this.team === 'T' ? 'AK-47' : 'M4A1-S';
+                                    this.ammo = WEAPONS[this.weapon].ammo;
+                                    this.broadcastRadio(`感谢 ${helper.name} 提供步枪！`);
+                                    helper.broadcastRadio(`已为 ${this.name} 购买步枪`);
+                                } else if (this.team === 'T' && this.money >= WEAPONS['MAC-10'].price) {
+                                    // T方购买MAC-10
+                                    this.weapon = 'MAC-10';
+                                    this.money -= WEAPONS['MAC-10'].price;
+                                    this.ammo = WEAPONS[this.weapon].ammo;
+                                } else if (this.team === 'CT' && this.money >= WEAPONS['MP9'].price) {
+                                    // CT方购买MP9
+                                    this.weapon = 'MP9';
+                                    this.money -= WEAPONS['MP9'].price;
+                                    this.ammo = WEAPONS[this.weapon].ammo;
+                                }
+                            }
+                        }
+                    } else {
+                        // 非全起局的原有逻辑
+                        // 狙击手优先购买AWP
+                        if (this.role === 'AWP' && this.money >= WEAPONS['AWP'].price) {
+                            this.weapon = 'AWP'; 
+                            this.money -= WEAPONS['AWP'].price;
+                            this.ammo = WEAPONS[this.weapon].ammo;
+                        } else if (this.money >= 2900) {
+                            // 有钱的话优先购买长枪
+                            const price = this.team === 'T' ? 2700 : 2900;
+                            if (this.money >= price) {
+                                this.weapon = this.team === 'T' ? 'AK-47' : 'M4A1-S';
+                                this.money -= price;
+                                this.ammo = WEAPONS[this.weapon].ammo;
+                            }
+                        } else if (this.team === 'T' && this.money >= WEAPONS['MAC-10'].price) {
+                            // T方购买MAC-10
+                            this.weapon = 'MAC-10';
+                            this.money -= WEAPONS['MAC-10'].price;
+                            this.ammo = WEAPONS[this.weapon].ammo;
+                        } else if (this.team === 'CT' && this.money >= WEAPONS['MP9'].price) {
+                            // CT方购买MP9
+                            this.weapon = 'MP9';
+                            this.money -= WEAPONS['MP9'].price;
+                            this.ammo = WEAPONS[this.weapon].ammo;
+                        }
+                    }
+                } else if (this.money >= 4750 && this.role === 'AWP' && this.weapon !== 'AWP') {
+                    // 非手枪状态下，狙击手也优先购买AWP
+                    this.weapon = 'AWP'; 
+                    this.money -= WEAPONS['AWP'].price;
+                    this.ammo = WEAPONS[this.weapon].ammo;
+                }
+
+                // 半起局策略
+                if (strategy === 'Half') {
+                    if (this.money > 2500) {
+                        // 金钱数>2500，购买deagle或者tec-9/fn57
+                        if (this.team === 'CT') {
+                            const handguns = ['FN57', 'Deagle'];
+                            const chosenGun = handguns[Math.floor(Math.random() * handguns.length)];
+                            if (this.money >= WEAPONS[chosenGun].price) {
+                                this.weapon = chosenGun;
+                                this.money -= WEAPONS[chosenGun].price;
+                                this.ammo = WEAPONS[this.weapon].ammo;
+                            }
+                        } else {
+                            const handguns = ['Tec-9', 'Deagle'];
+                            const chosenGun = handguns[Math.floor(Math.random() * handguns.length)];
+                            if (this.money >= WEAPONS[chosenGun].price) {
+                                this.weapon = chosenGun;
+                                this.money -= WEAPONS[chosenGun].price;
+                                this.ammo = WEAPONS[this.weapon].ammo;
+                            }
+                        }
+                    } else if (this.money >= 2200 && this.money <= 2400) {
+                        // 金钱数2200-2400，购买闪光和手雷
+                        if (this.money >= UTILITY_PRICES.flash) {
+                            this.utility.flash = 1;
+                            this.money -= UTILITY_PRICES.flash;
+                        }
+                        if (this.money >= UTILITY_PRICES.nade) {
+                            this.utility.nade = 1;
+                            this.money -= UTILITY_PRICES.nade;
+                        }
+                    }
+                    // 其他情况一律不买
+                } else {
+                        // 非半起局策略的护甲购买
+                        if (this.money >= 1000 && this.armorType === '空') {
+                            this.armorType = '护甲+头盔';
+                            this.money -= 1000;
+                        }
+
+                        // 道具购买
+                        const buyOrder = ['smoke', 'fire', 'flash', 'nade', 'flash'];
+                        for (let item of buyOrder) {
+                            if (this.money < 300) break;
+                            let totalUtil = Object.values(this.utility).reduce((a,b)=>a+b, 0);
+                            if (totalUtil >= 4) break;
+                            let limit = (item === 'flash') ? 2 : 1;
+                            if (this.utility[item] < limit && this.money >= UTILITY_PRICES[item]) {
+                                this.utility[item]++;
+                                this.money -= UTILITY_PRICES[item];
+                            }
+                        }
+                    }
+
+                    if (this.team === 'CT' && !this.hasKit && this.money >= 400 && strategy === 'Full') {
+                        this.hasKit = true;
+                        this.money -= 400;
+                    }
+                }
+                
+                // 设置狙击手持有AWP时的特殊初始位置
+                this.setSniperTactics();
+            }
+
+            throwSmoke(targetNode) {
+                if (this.utility.smoke > 0) {
+                    this.utility.smoke--;
+                    state.smokes.push(new Smoke(this.team, this.x, this.y, targetNode));
+                    this.broadcastRadio(`收到，投掷烟雾弹至 ${targetNode}！`);
+                }
+            }
+
+            throwFlash(targetNode) {
+                if (this.utility.flash > 0) {
+                    this.utility.flash--;
+                    state.flashes.push(new Flash(this.team, this.x, this.y, targetNode));
+                    this.broadcastRadio(`收到，投掷闪光弹至 ${targetNode}！`);
+                }
+            }
+
+            throwMolotov(targetNode) {
+                if (this.utility.fire > 0) {
+                    this.utility.fire--;
+                    state.molotovs.push(new Molotov(this.team, this, this.x, this.y, targetNode));
+                    this.broadcastRadio(`收到，投掷燃烧瓶至 ${targetNode}！`);
+                }
+            }
+
+            throwNade() {
+                if (this.utility.nade > 0) {
+                    this.utility.nade--;
+                    state.grenades.push(new Grenade(this.team, this, this.x, this.y, this.angle));
+                    this.broadcastRadio(`投掷手雷！`);
+                }
+            }
+
+            setTactics(idx) {
+                if (this.team === 'T') {
+                    // T方初始进攻方向：a门、a门外、a小上、a小下、沙地、b1、b2，随机分配
+                    const tDestinations = ['a门', 'a门外', 'a小上', 'a小下', '沙地', 'b1', 'b2'];
+                    this.destination = tDestinations[Math.floor(Math.random() * tDestinations.length)];
+                } else {
+                    this.destination = ['a点', 'b点', 'a小下', '沙地', '警家', 'a门外'][idx % 6];
+                }
+                this.path = findPath(this.posNode, this.destination);
+                this.pathIdx = 1;
+            }
+            
+            // 设置狙击手持有AWP时的特殊初始位置
+            setSniperTactics() {
+                if (this.role === 'AWP' && this.weapon === 'AWP') {
+                    if (this.team === 'T') {
+                        // T方狙击手持有AWP时，初始会前往中路
+                        this.destination = '中路';
+                    } else {
+                        // CT方狙击手持有AWP时，初始会前往沙地
+                        this.destination = '沙地';
+                    }
+                    this.path = findPath(this.posNode, this.destination);
+                    this.pathIdx = 1;
+                }
+            }
+            
+            // 计算换算余额（枪械、道具、护甲的总价格+存款）
+            getConvertedBalance() {
+                let assetsValue = 0;
+                if (WEAPONS[this.weapon]) assetsValue += WEAPONS[this.weapon].price;
+                if (this.armorType === '护甲+头盔') assetsValue += 1000;
+                else if (this.armorType === '护甲') assetsValue += 650;
+                assetsValue += (this.utility.smoke * UTILITY_PRICES.smoke);
+                assetsValue += (this.utility.fire * UTILITY_PRICES.fire);
+                assetsValue += (this.utility.flash * UTILITY_PRICES.flash);
+                assetsValue += (this.utility.nade * UTILITY_PRICES.nade);
+                if (this.hasKit) assetsValue += 400;
+                return assetsValue + this.money;
+            }
+
+            broadcastRadio(msg) {
+                const teamPlayers = state.players.filter(p => p.team === this.team);
+                const commanders = teamPlayers.filter(p => p.role === 'Rifle');
+                const isCommander = commanders.length > 0 && this.name === commanders[0].name;
+                if (!this.isAlive && !isCommander) return;
+                const senderDisplay = this.name + (!this.isAlive ? " (死亡)" : "");
+                state.radioHistory[this.team].push({ sender: senderDisplay, team: this.team, text: msg, time: Date.now() });
+                if (state.radioHistory[this.team].length > 25) state.radioHistory[this.team].shift();
+                if (state.radioView === this.team) updateRadioUI();
+            }
+
+            isIdle() { return !this.aimingAt && this.pathIdx >= this.path.length && !this.tempTarget; }
+
+            update(dt, now) {
+                if (!this.isAlive) return;
+
+                state.droppedWeapons.forEach((dw, i) => {
+                    const dist = Math.sqrt((this.x - dw.x)**2 + (this.y - dw.y)**2);
+                    if (dist < 20) {
+                        let shouldPick = false;
+                        
+                        // 武器优先级映射：数值越高优先级越高
+                        const weaponPriority = {
+                            'MAC-10': 1,
+                            'MP9': 2,
+                            'M4A1-S': 3,
+                            'AK-47': 4,
+                            'AWP': 10 // AWP优先级最高
+                        };
+                        
+                        // 获取当前武器和掉落武器的优先级
+                        const currentPriority = weaponPriority[this.weapon] || 0;
+                        const droppedPriority = weaponPriority[dw.name] || 0;
+                        
+                        // 判断是否应该捡起
+                        if (!WEAPONS[this.weapon].isMain) {
+                            // 没有主武器，直接捡起（非狙击手不捡AWP）
+                            if (dw.name === 'AWP' && this.role !== 'AWP') {
+                                shouldPick = false;
+                            } else {
+                                shouldPick = true;
+                            }
+                        } else if (this.role === 'AWP' && dw.name === 'AWP' && this.weapon !== 'AWP') {
+                            // 狙击手看到AWP，直接捡起
+                            shouldPick = true;
+                        } else if (WEAPONS[dw.name].isMain && droppedPriority > currentPriority) {
+                            // 掉落武器是主武器且优先级高于当前武器（非狙击手不捡AWP）
+                            if (dw.name === 'AWP' && this.role !== 'AWP') {
+                                shouldPick = false;
+                            } else {
+                                shouldPick = true;
+                            }
+                        }
+
+                        if (shouldPick) {
+                            const oldWeapon = this.weapon;
+                            this.weapon = dw.name;
+                            this.ammo = WEAPONS[this.weapon].ammo;
+                            state.droppedWeapons.splice(i, 1);
+                            if (WEAPONS[oldWeapon].isMain) {
+                                state.droppedWeapons.push(new DroppedWeapon(oldWeapon, this.x, this.y));
+                            }
+                            this.broadcastRadio(`拾取了 ${this.weapon}。`);
+                        }
+                    }
+                });
+                
+                // 燃烧伤害检查逻辑：每5秒检查一次是否仍然在燃烧
+                if (this.isOnFire) {
+                    this.lastFireCheck += dt * state.speed;
+                    if (this.lastFireCheck >= 5.0) {
+                        this.lastFireCheck = 0;
+                        
+                        // 检查当前位置是否有燃烧瓶
+                        const isInFire = state.molotovs.some(m => {
+                            if (!m.exploded || m.life <= 0) return false;
+                            const dist = Math.sqrt((this.x - m.x)**2 + (this.y - m.y)**2);
+                            return dist < m.radius;
+                        });
+                        
+                        if (isInFire) {
+                            // 寻找周围没有火的安全地点
+                            const currentNode = MAP_NODES[this.posNode];
+                            const safeNodes = [];
+                            
+                            // 检查当前节点的所有相邻节点
+                            if (currentNode.links) {
+                                currentNode.links.forEach(linkNode => {
+                                    const link = MAP_NODES[linkNode];
+                                    
+                                    // 检查该相邻节点是否有燃烧瓶
+                                    const isLinkSafe = !state.molotovs.some(m => {
+                                        if (!m.exploded || m.life <= 0) return false;
+                                        const dist = Math.sqrt((link.x - m.x)**2 + (link.y - m.y)**2);
+                                        return dist < m.radius;
+                                    });
+                                    
+                                    if (isLinkSafe) {
+                                        safeNodes.push(linkNode);
+                                    }
+                                });
+                            }
+                            
+                            // 如果找到安全地点，前往该地点
+                            if (safeNodes.length > 0) {
+                                const safeTarget = safeNodes[Math.floor(Math.random() * safeNodes.length)];
+                                this.destination = safeTarget;
+                                this.path = findPath(this.posNode, safeTarget);
+                                this.pathIdx = 0;
+                                this.broadcastRadio(`正在逃离火焰，前往 ${safeTarget}！`);
+                            } else {
+                                // 如果没有安全地点，随机选择一个相邻节点
+                                if (currentNode.links && currentNode.links.length > 0) {
+                                    const randomTarget = currentNode.links[Math.floor(Math.random() * currentNode.links.length)];
+                                    this.destination = randomTarget;
+                                    this.path = findPath(this.posNode, randomTarget);
+                                    this.pathIdx = 0;
+                                    this.broadcastRadio(`正在逃离火焰，前往 ${randomTarget}！`);
+                                }
+                            }
+                        } else {
+                            // 如果当前位置没有火，标记为不在燃烧状态
+                            this.isOnFire = false;
+                        }
+                    }
+                }
+                
+                if (this.blindTimer > 0) {
+                    this.blindTimer -= dt * state.speed;
+                    if (this.blindTimer < 0) this.blindTimer = 0;
+                }
+
+                if (this.isPlanting) return;
+                if (this.hitFlash > 0) this.hitFlash -= dt * 5 * state.speed;
+                if (this.defuseCooldown > 0) this.defuseCooldown -= dt * state.speed;
+
+                if (this.isReloading) {
+                    if (now - this.reloadStart > WEAPONS[this.weapon].reload / state.speed) {
+                        this.ammo = WEAPONS[this.weapon].ammo; this.isReloading = false;
+                    }
+                    return;
+                }
+
+                const isMoving = this.pathIdx < this.path.length || this.tempTarget !== null;
+                if (this.weapon === 'AWP' && !isMoving) {
+                    this.viewDistance = 250 * 1.5;
+                    this.viewAngle = (35 * (Math.PI / 180)) / 2;
+                } else if (WEAPONS[this.weapon] && WEAPONS[this.weapon].视野缩短) {
+                    this.viewDistance = 250 / 2;
+                    this.viewAngle = (35 * (Math.PI / 180)) / 2;
+                } else {
+                    this.viewDistance = 250;
+                    this.viewAngle = 35 * (Math.PI / 180);
+                }
+                if (this.team === 'T' && !this.hasBomb && state.bomb.state === 'idle' && !state.bomb.carrier) {
+                    const distToBomb = Math.sqrt((this.x - state.bomb.x)**2 + (this.y - state.bomb.y)**2);
+                    if (distToBomb < 15) {
+                        this.hasBomb = true; state.bomb.carrier = this;
+                        this.tempTarget = null;
+                        this.broadcastRadio("我拿回包了，原地待命！");
+                        this.destination = this.posNode;
+                        this.path = [this.posNode];
+                        this.pathIdx = 0;
+                    }
+                }
+
+                if (this.team === 'CT' && state.bomb.state === 'planted' && this.blindTimer <= 0) {
+                    const distToBomb = Math.sqrt((this.x - state.bomb.x)**2 + (this.y - state.bomb.y)**2);
+                    const visibleEnemies = state.players.filter(p => p.isAlive && p.team === 'T' && this.canSee(p));
+                    if (distToBomb < 15 && this.defuseCooldown <= 0 && visibleEnemies.length === 0 && (state.bomb.defuser === null || state.bomb.defuser === this)) {
+                        if (state.bomb.defuser === null) {
+                            state.bomb.defuser = this;
+                            state.bomb.defuseProgress = 0;
+                            this.broadcastRadio("正在拆除炸弹！掩护我！");
+                            document.getElementById('defuse-bar-bg').classList.remove('hidden');
+                            WeaponSounds.play('c4_disarmstart');
+                        }
+                        const defuseTime = this.hasKit ? 5 : 10;
+                        state.bomb.defuseProgress += (dt * state.speed / defuseTime) * 100;
+                        document.getElementById('defuse-bar-fill').style.width = `${state.bomb.defuseProgress}%`;
+                        if (state.bomb.defuseProgress >= 100) {
+                            this.money += 300; 
+                            WeaponSounds.play('bomb_defuse');
+                            state.bomb.defuseProgress = 0; // 防止重复播放音效
+                            document.getElementById('defuse-bar-bg').classList.add('hidden'); // 隐藏拆弹进度条
+                            endRound('CT', 'BOMB DEFUSED');
+                        }
+                        return; 
+                    } else if (state.bomb.defuser === this) {
+                        state.bomb.defuser = null;
+                        state.bomb.defuseProgress = 0;
+                        document.getElementById('defuse-bar-bg').classList.add('hidden');
+                    }
+                }
+
+                const visibleEnemies = state.players.filter(p => p.isAlive && p.team !== this.team && this.canSee(p));
+                this.aimingAt = (this.blindTimer <= 0) ? (visibleEnemies[0] || null) : null;
+                this.handleHelpRadio(visibleEnemies);
+
+                if (this.aimingAt) {
+                    this.targetAngle = Math.atan2(this.aimingAt.y - this.y, this.aimingAt.x - this.x);
+                    
+                    // 修改点：狙击手开火瞬间不晃动
+                    const isAWPPunishment = this.weapon === 'AWP' && (now - this.lastShot < 500 / state.speed);
+                    
+                    if (this.strafeMode === 'strafe' && !isAWPPunishment) {
+                        this.strafeTimer -= dt;
+                        if (this.strafeTimer <= 0) { this.strafeDir *= -1; this.strafeTimer = 0.4 + Math.random(); }
+                        const sAngle = this.angle + Math.PI/2 * this.strafeDir;
+                        this.x += Math.cos(sAngle) * 12.5 * dt * state.speed;
+                        this.y += Math.sin(sAngle) * 12.5 * dt * state.speed;
+                    }
+                    let angleDiff = this.normalizeAngle(this.targetAngle - this.angle);
+                    this.angle += Math.sign(angleDiff) * 8 * dt * state.speed;
+                    if (Math.abs(angleDiff) < 0.1) {
+                        this.shoot(this.aimingAt, now);
+                    }
+                } else {
+                    if (this.isHitReacting) {
+                        // 受击时以两倍速度旋转视角
+                        let angleDiff = this.normalizeAngle(this.targetAngle - this.angle);
+                        this.angle += Math.sign(angleDiff) * 6 * dt * state.speed; // 正常速度是3，这里用6
+                        if (Math.abs(angleDiff) < 0.1) {
+                            this.isHitReacting = false; // 完成转向后重置标志
+                        }
+                    } else {
+                        if (this.blindTimer <= 0) this.moveAlongPath(dt);
+                        if (this.isIdle()) this.helpRequested = false; 
+                    }
+                }
+            }
+
+            handleHelpRadio(enemies) {
+                if (this.helpRequested) return;
+                let needHelp = false; let isUrgent = false;
+                if (this.team === 'T') { if (enemies.length >= 2) needHelp = true; }
+                else { if (enemies.length === 2) needHelp = true; if (enemies.length >= 3 || enemies.some(e => e.hasBomb)) { needHelp = true; isUrgent = true; } }
+                if (needHelp) {
+                    this.helpRequested = true;
+                    this.broadcastRadio(isUrgent ? "这里有大量敌人或包匪！！快来支援！！" : "遇到多名敌人，请求支援！");
+                    state.players.forEach(p => {
+                        if (p.team === this.team && p.isAlive && p !== this && p.isIdle()) {
+                            if (isUrgent) { p.broadcastRadio("收到，全速支援！"); p.goToSupport(this.posNode); }
+                            else { if (Math.random() < 0.5) { p.broadcastRadio("收到，正在赶往你的位置。"); p.goToSupport(this.posNode); } else { p.broadcastRadio("拒绝，我需要守住当前位置。"); } }
+                        }
+                    });
+                }
+            }
+
+            goToSupport(targetNode) {
+                this.destination = targetNode;
+                this.path = findPath(this.posNode, targetNode);
+                this.pathIdx = 0;
+            }
+
+            moveAlongPath(dt) {
+                // 修改点 2：钻烟逻辑修改
+                const enemySmoke = state.smokes.find(s => !s.isFlying && s.team !== this.team && Math.sqrt((this.x - s.x)**2 + (this.y - s.y)**2) < s.radius + 10);
+                if (enemySmoke) {
+                    this.smokeWaitTimer += dt * state.speed;
+                    // 每 5 秒（模拟时间）进行一次决策判断
+                    if (this.smokeWaitTimer >= 5) {
+                        this.smokeWaitTimer = 0;
+                        // 50% 几率停止，50% 几率继续前进
+                        this.isStuckInSmoke = Math.random() < 0.5;
+                    }
+                    if (this.isStuckInSmoke) {
+                        this.isMoving = false;
+                        return; 
+                    }
+                } else { 
+                    this.smokeWaitTimer = 0;
+                    this.isStuckInSmoke = false;
+                }
+                
+                // 视野中火的检测：如果视野中有火且玩家不在逃离火区，原地停留直到火消失
+                if (!this.isEscapingFire && !this.isOnFire) {
+                    const isFireInSight = state.molotovs.some(m => {
+                        if (!m.exploded || m.life <= 0) return false;
+                        const dist = Math.sqrt((this.x - m.x)**2 + (this.y - m.y)**2);
+                        if (dist > this.viewDistance) return false;
+                        
+                        // 检查火是否在视野范围内
+                        const angleToFire = Math.atan2(m.y - this.y, m.x - this.x);
+                        const angleDiff = Math.abs(this.normalizeAngle(angleToFire - this.angle));
+                        return angleDiff < this.viewAngle / 2;
+                    });
+                    
+                    if (isFireInSight) {
+                        this.isMoving = false;
+                        return; // 视野中有火，原地停留
+                    }
+                }
+
+                const speed = 75 * dt * state.speed;
+                if (this.pathIdx < this.path.length) {
+                    const next = MAP_NODES[this.path[this.pathIdx]];
+                    const dx = next.x - this.x, dy = next.y - this.y;
+                    const dist = Math.sqrt(dx*dx+dy*dy);
+                    if (!this.aimingAt) {
+                        this.targetAngle = Math.atan2(dy, dx);
+                        let angleDiff = this.normalizeAngle(this.targetAngle - this.angle);
+                        this.angle += Math.sign(angleDiff) * 3 * dt * state.speed;
+                    }
+                    if (dist > 5) {
+                        this.x += (dx/dist) * speed; this.y += (dy/dist) * speed;
+                        this.isMoving = true;
+                    } else {
+                        this.posNode = this.path[this.pathIdx];
+                        this.pathIdx++;
+                        this.isMoving = false;
+                        
+                        // 检查是否到达逃离火焰的目标地点
+                        if (this.isEscapingFire && this.pathIdx >= this.path.length) {
+                            this.isEscapingFire = false; // 任务完成，重置标志
+                        }
+                        
+                        // 检查是否到达路径终点
+                        if (this.pathIdx >= this.path.length) {
+                            // 到达固定地点，立即设置视角方向为当前节点的随机相邻节点
+                            const currentNode = MAP_NODES[this.posNode];
+                            if (currentNode.links.length > 0) {
+                                const randomLink = currentNode.links[Math.floor(Math.random() * currentNode.links.length)];
+                                const targetNode = MAP_NODES[randomLink];
+                                this.targetAngle = Math.atan2(targetNode.y - this.y, targetNode.x - this.x);
+                            }
+                            // 重置idleWatchTimer为3-10秒
+                            this.idleWatchTimer = 3 + Math.random() * 7;
+                        }
+                        
+                        if (this.hasBomb && MAP_NODES[this.posNode].type === 'site' && state.bomb.state === 'idle') this.plantBomb();
+                    }
+                } else if (this.tempTarget) {
+                    const dx = this.tempTarget.x - this.x, dy = this.tempTarget.y - this.y;
+                    const dist = Math.sqrt(dx*dx+dy*dy);
+                    if (!this.aimingAt) this.targetAngle = Math.atan2(dy, dx);
+                    if (dist > 5) {
+                        this.x += (dx/dist) * speed; this.y += (dy/dist) * speed;
+                        this.isMoving = true;
+                    } else { 
+                        this.tempTarget = null;
+                        this.isMoving = false;
+                        // 到达临时目标后，立即设置视角方向为当前节点的随机相邻节点
+                        const currentNode = MAP_NODES[this.posNode];
+                        if (currentNode.links.length > 0) {
+                            const randomLink = currentNode.links[Math.floor(Math.random() * currentNode.links.length)];
+                            const targetNode = MAP_NODES[randomLink];
+                            this.targetAngle = Math.atan2(targetNode.y - this.y, targetNode.x - this.x);
+                        }
+                        // 重置idleWatchTimer为3-10秒
+                        this.idleWatchTimer = 3 + Math.random() * 7;
+                    }
+                } else if (!this.aimingAt) {
+                    if (this.isMoving) {
+                        // 刚进入静止状态，立即随机选择一个相邻节点作为视角方向
+                        this.isMoving = false;
+                        const currentNode = MAP_NODES[this.posNode];
+                        if (currentNode.links.length > 0) {
+                            // 随机选择当前节点的一个相邻节点作为视角方向
+                            const randomLink = currentNode.links[Math.floor(Math.random() * currentNode.links.length)];
+                            const targetNode = MAP_NODES[randomLink];
+                            this.targetAngle = Math.atan2(targetNode.y - this.y, targetNode.x - this.x);
+                        }
+                        // 重置idleWatchTimer为3-10秒
+                        this.idleWatchTimer = 3 + Math.random() * 7;
+                    } else {
+                        // 保持静止状态，继续使用现有的idleWatchTimer逻辑
+                        this.idleWatchTimer -= dt * state.speed;
+                        if (this.idleWatchTimer <= 0) {
+                            const currentNode = MAP_NODES[this.posNode];
+                            if (currentNode.links.length > 0) {
+                                // 随机选择当前节点的一个相邻节点作为视角方向
+                                const randomLink = currentNode.links[Math.floor(Math.random() * currentNode.links.length)];
+                                const targetNode = MAP_NODES[randomLink];
+                                this.targetAngle = Math.atan2(targetNode.y - this.y, targetNode.x - this.x);
+                            }
+                            // 每隔3~10秒切换一次方向
+                            this.idleWatchTimer = 3 + Math.random() * 7;
+                        }
+                    }
+                    let angleDiff = this.normalizeAngle(this.targetAngle - this.angle);
+                    this.angle += Math.sign(angleDiff) * 3 * dt * state.speed;
+                }
+            }
+
+            shoot(target, now) {
+                if (this.blindTimer > 0) return;
+                if (!this.canSee(target)) return;
+
+                const config = WEAPONS[this.weapon];
+                if (this.ammo <= 0) { 
+                    this.isReloading = true; 
+                    this.reloadStart = now; 
+                    WeaponSounds.play('reload'); // 播放换弹音效
+                    return; 
+                }
+                if (now - this.lastShot < config.cd / state.speed) return;
+                
+                // AWP 开火瞬间增加一段硬直，配合 update 里的 isAWPPunishment
+                if (this.weapon === 'AWP' && this.strafeMode === 'strafe') {
+                    this.strafeTimer = 0.5; 
+                }
+
+                this.lastShot = now; this.ammo--;
+                state.tracers.push({ x1: this.x, y1: this.y, x2: target.x, y2: target.y, life: 0.1 });
+                
+                // 添加开火特效
+                const fireSize = this.weapon === 'AWP' ? 15 : 10;
+                const fireX = this.x + Math.cos(this.angle) * 15;
+                const fireY = this.y + Math.sin(this.angle) * 15;
+                state.fireEffects = state.fireEffects || [];
+                state.fireEffects.push({ 
+                    x: fireX, 
+                    y: fireY, 
+                    size: fireSize, 
+                    life: 0.1, 
+                    angle: this.angle 
+                });
+                
+                // 播放武器音效
+                WeaponSounds.play(this.weapon);
+                
+                let hitChance = this.strafeMode === 'strafe' ? 0.25 : 0.45;
+                if (this.weapon === 'AWP') {
+                    // 判断是否处于开火瞬间的急停状态
+                    const isActuallyMoving = this.strafeMode === 'strafe' && (now - this.lastShot > 100);
+                    hitChance = isActuallyMoving ? 0.15 : 0.6;
+                }
+                if (this.weapon === 'M4A1-S') hitChance += 0.15;
+
+                // USP的爆头率为40%
+                let isHS;
+                if (this.weapon === 'USP-S') {
+                    isHS = Math.random() > 0.5; // 40%的概率爆头
+                } else {
+                    isHS = Math.random() > 0.7; // 30%的概率爆头
+                }
+                const damage = isHS ? WEAPONS[this.weapon].headDamage : WEAPONS[this.weapon].damage;
+                if (Math.random() < hitChance) target.receiveDamage(this, damage, isHS);
+            }
+
+            receiveDamage(attacker, amount, isHS) {
+                this.hp -= amount; this.hitFlash = 1.0;
+                const angleToAttacker = Math.atan2(attacker.y - this.y, attacker.x - this.x);
+                if (!this.aimingAt) {
+                    this.targetAngle = angleToAttacker;
+                    this.isHitReacting = true;
+                }
+                if (state.bomb.defuser === this) { state.bomb.defuser = null; state.bomb.defuseProgress = 0; this.defuseCooldown = 3.0; document.getElementById('defuse-bar-bg').classList.add('hidden'); }
+                if (this.hp <= 0) {
+                    this.hp = 0; this.isAlive = false; this.deaths++;
+                    
+                    if (WEAPONS[this.weapon].isMain) {
+                        state.droppedWeapons.push(new DroppedWeapon(this.weapon, this.x, this.y));
+                    }
+
+                    if (this.isPlanting) { state.bomb.state = 'idle'; state.bomb.carrier = null; state.bomb.x = this.x; state.bomb.y = this.y; state.bomb.node = this.posNode; this.hasBomb = false; }
+                    if (this.hasBomb) { state.bomb.carrier = null; state.bomb.x = this.x; state.bomb.y = this.y; state.bomb.node = this.posNode; this.hasBomb = false; }
+                    if (state.bomb.defuser === this) { state.bomb.defuser = null; state.bomb.defuseProgress = 0; document.getElementById('defuse-bar-bg').classList.add('hidden'); }
+                    addKillFeed(attacker, this, attacker.weapon, isHS);
+                    attacker.kills++; 
+                    attacker.money += 200; 
+                    checkRoundEnd();
+                }
+            }
+
+            plantBomb() {
+                state.bomb.state = 'planting'; this.isPlanting = true;
+                this.broadcastRadio("正在安放炸弹...");
+                WeaponSounds.play('c4_initiate'); // 开始激活炸弹时播放
+                setTimeout(() => {
+                    if (this.isAlive && this.hasBomb && this.isPlanting) {
+                        state.bomb.state = 'planted'; state.bomb.x = this.x; state.bomb.y = this.y;
+                        state.bomb.node = this.posNode; state.bomb.time = 40;
+                        state.bomb.carrier = null; this.hasBomb = false; this.isPlanting = false;
+                        this.money += 300; 
+                        state.bomb.planter = this; 
+                        document.getElementById('timer-container').classList.add('bg-red-900');
+                        this.broadcastRadio("炸弹已安放！");
+                        WeaponSounds.play('bomb_plant');
+                        // 初始化炸弹滴声计时器
+                        state.bomb.lastBeep = 0;
+                        state.bomb.beepInterval = 800; // 初始为0.8秒
+                        
+                        const tAlive = state.players.filter(p => p.isAlive && p.team === 'T');
+                        // 找到T方的指挥（取第一个Rifle角色的选手作为指挥）
+                        const tCommanders = tAlive.filter(p => p.role === 'Rifle');
+                        const tLeader = tCommanders.length > 0 ? tCommanders[0] : tAlive[0];
+                        if (tLeader) {
+                            if (state.bomb.node === 'a点') {
+                                const smoker = tAlive.find(p => p.utility.flash > 0);
+                                if (smoker) {
+                                    const loc = Math.random() > 0.5 ? '警家' : 'a小下';
+                                    tLeader.broadcastRadio(`指挥：下包完成，${smoker.name} 给一颗 ${loc} 闪光！`);
+                                    smoker.throwFlash(loc);
+                                }
+                            } else if (state.bomb.node === 'b点') {
+                                if (Math.random() > 0.3) {
+                                    const smoker = tAlive.find(p => p.utility.flash > 0);
+                                    if (smoker) {
+                                        const locs = ['狗洞', 'b门', '沙地'];
+                                        const loc = locs[Math.floor(Math.random() * locs.length)];
+                                        tLeader.broadcastRadio(`指挥：守包，${smoker.name} 闪一下 ${loc}！`);
+                                        smoker.throwFlash(loc);
+                                    }
+                                }
+                            }
+                        }
+
+                        // 下包完成后，指挥会派遣一半以下的选手前往其他地方
+                        if (tAlive.length > 1) {
+                            const playersToSend = Math.floor(tAlive.length / 2);
+                            const availablePlayers = [...tAlive];
+                            const playersToMove = availablePlayers.sort(() => 0.5 - Math.random()).slice(0, playersToSend);
+                            
+                            if (state.bomb.node === 'a点') {
+                                // a点：a大、a小、警家
+                                const targets = ['a大', 'a小下', '警家'];
+                                playersToMove.forEach((p, index) => {
+                                    const target = targets[index % targets.length];
+                                    if (tLeader) { tLeader.broadcastRadio(`指挥：${p.name} 前往 ${target} 防守！`); }
+                                    p.destination = target;
+                                    p.path = findPath(p.posNode, target);
+                                    p.pathIdx = 0;
+                                });
+                            } else if (state.bomb.node === 'b点') {
+                                // b点：b门、狗洞、b通
+                                const targets = ['b门', '狗洞', 'b2'];
+                                playersToMove.forEach((p, index) => {
+                                    const target = targets[index % targets.length];
+                                    if (tLeader) { tLeader.broadcastRadio(`指挥：${p.name} 前往 ${target} 防守！`); }
+                                    p.destination = target;
+                                    p.path = findPath(p.posNode, target);
+                                    p.pathIdx = 0;
+                                });
+                            }
+                        }
+                        
+                        // 剩余的选手留在包点防守
+                        const remainingPlayers = state.players.filter(p => p.isAlive && (p.team !== 'T' || !playersToMove || !playersToMove.includes(p)));
+                        remainingPlayers.forEach(p => {
+                            if (p.team === 'T') {
+                                p.destination = this.posNode;
+                                p.path = findPath(p.posNode, this.posNode);
+                                p.pathIdx = 0;
+                                p.tempTarget = null;
+                                // 标记为防守状态，避免被战术重组逻辑重新分配任务
+                                p.isDefending = true;
+                            }
+                        });
+                        
+                        // 已派遣的选手也标记为防守状态
+                        playersToMove.forEach(p => {
+                            p.isDefending = true;
+                        });
+                    }
+                }, 3000 / state.speed);
+            }
+
+            canSee(other) {
+                if (this.blindTimer > 0) return false;
+                const dx = other.x - this.x, dy = other.y - this.y;
+                const distToEnemy = Math.sqrt(dx*dx + dy*dy);
+                if (distToEnemy > this.viewDistance) return false;
+
+                // 检查目标玩家是否在烟雾中
+                const isEnemyInSmoke = state.smokes.some(s => {
+                    if (s.isFlying || s.grenadeEffect > 0) return false;
+                    const distToEnemyFromSmoke = Math.sqrt((other.x - s.x)**2 + (other.y - s.y)**2);
+                    return distToEnemyFromSmoke < s.radius;
+                });
+                if (isEnemyInSmoke) return false;
+
+                // 检查视线是否被烟雾阻挡
+                const isBlockedBySmoke = state.smokes.some(s => {
+                    if (s.isFlying || s.grenadeEffect > 0) return false;
+                    const dToLine = distToSegment({x: this.x, y: this.y}, {x: other.x, y: other.y}, {x: s.x, y: s.y});
+                    if (dToLine < s.radius) {
+                        const distToSmoke = Math.sqrt((this.x - s.x)**2 + (this.y - s.y)**2);
+                        if (distToSmoke - distToEnemy > s.radius) return false;
+                        return true;
+                    }
+                    return false;
+                });
+                if (isBlockedBySmoke) return false;
+
+                const angleTo = Math.atan2(dy, dx);
+                return Math.abs(this.normalizeAngle(angleTo - this.angle)) < this.viewAngle/2;
+            }
+
+            normalizeAngle(a) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
+        }
+
+        function distToSegment(p, v, w) {
+            const l2 = (v.x - w.x)**2 + (v.y - w.y)**2;
+            if (l2 == 0) return Math.sqrt((p.x - v.x)**2 + (p.y - v.y)**2);
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.sqrt((p.x - (v.x + t * (w.x - v.x)))**2 + (p.y - (v.y + t * (w.y - v.y)))**2);
+        }
+
+        function toggleRadio() { document.getElementById('radio-window').classList.toggle('-translate-x-[110%]'); }
+        function switchRadio(team) {
+            state.radioView = team;
+            document.getElementById('tab-t').className = `flex-1 py-2 text-[10px] font-bold ${team==='T'?'text-orange-500 border-orange-500':'text-slate-400 border-transparent'} border-b-2 uppercase tracking-tighter`;
+            document.getElementById('tab-ct').className = `flex-1 py-2 text-[10px] font-bold ${team==='CT'?'text-blue-500 border-blue-500':'text-slate-400 border-transparent'} border-b-2 uppercase tracking-tighter`;
+            updateRadioUI();
+        }
+
+        function updateRadioUI() {
+            const container = document.getElementById('radio-content'); container.innerHTML = '';
+            state.radioHistory[state.radioView].slice().reverse().forEach(m => {
+                const el = document.createElement('div'); el.className = `radio-msg bg-white/5`;
+                el.innerHTML = `<span class="font-bold ${m.team==='T'?'text-orange-400':'text-blue-400'}">${m.sender}:</span> <span class="text-slate-200">${m.text}</span>`;
+                container.appendChild(el);
+            });
+        }
+
+        function addKillFeed(k, v, w, hs) {
+            const feed = document.getElementById('kill-feed');
+            const el = document.createElement('div');
+            
+            // 修改下面这一行：将 text-[11px] 修改为你想要的大小
+            el.className = `flex items-center bg-black/80 px-4 py-1 mb-1 border-r-4 ${k.team === 'T' ? 'border-orange-500' : 'border-blue-500'} text-[13px] font-bold`;
+            
+            const separator = hs ? "" : "";
+            
+            // 如果想要武器名称的大小也跟着变，可以修改下面的 text-[9px]
+            el.innerHTML = `<span class="${k.team==='T'?'text-orange-400':'text-blue-400'}">${k.name}</span><span class="text-yellow-500 text-[13px] mx-1">${w}${hs?' -🗣️> ':''}</span><span>${separator}</span><span class="ml-1 ${v.team==='T'?'text-orange-400':'text-blue-400'}">${v.name}</span>`;
+            
+            feed.prepend(el); 
+            setTimeout(() => el.remove(), 5000);
+        }
+
+        function getTeamTotalMoney(team) {
+            return state.players.filter(p => p.team === team).reduce((sum, p) => {
+                let assetsValue = 0;
+                if (WEAPONS[p.weapon]) assetsValue += WEAPONS[p.weapon].price;
+                if (p.armorType === '护甲+头盔') assetsValue += 1000;
+                else if (p.armorType === '护甲') assetsValue += 650;
+                assetsValue += (p.utility.smoke * UTILITY_PRICES.smoke);
+                assetsValue += (p.utility.fire * UTILITY_PRICES.fire);
+                assetsValue += (p.utility.flash * UTILITY_PRICES.flash);
+                assetsValue += (p.utility.nade * UTILITY_PRICES.nade);
+                if (p.hasKit) assetsValue += 400;
+                return sum + p.money + assetsValue;
+            }, 0);
+        }
+
+        function initRound() {
+            state.time = 115; state.tracers = []; state.smokes = []; state.flashes = []; state.molotovs = []; state.grenades = []; state.droppedWeapons = []; state.isRoundEnded = false; state.lastTacticCheck = 0; state.lastSmokeCheck = 0; state.lastRetakeFlashCheck = 0;
+            // 清空场上所有炸弹，取消炸弹倒计时
+            state.bomb = { state: 'idle', carrier: null, x: MAP_NODES['匪家'].x, y: MAP_NODES['匪家'].y, node: '匪家', time: 40, defuser: null, defuseProgress: 0, planter: null };
+            document.getElementById('timer-container').className = 'px-8 py-1 flex flex-col items-center justify-center bg-slate-900 min-w-[140px] transition-colors duration-500';
+            document.getElementById('defuse-bar-bg').classList.add('hidden');
+            document.getElementById('victory-banner').style.display = 'none';
+            
+            // 重置开局燃烧瓶指令标志
+            state.hasReleasedStartMolotov = false;
+            // 重置CT开局b2火指令标志
+            state.hasReleasedCTB2Fire = false;
+            // 重置T方开局丢雷指令标志
+            state.hasReleasedStartNade = false;
+            // 重置进攻a/b点扔火指令的冷却时间
+            state.lastAttackMolotovTime = { a: 0, b: 0 };
+            // 重置所有玩家的防守状态
+            state.players.forEach(p => {
+                p.isDefending = false;
+            });
+            
+            // 播放回合开始音效
+            WeaponSounds.play('round_start');
+            
+            state.radioHistory.T = [];
+            state.radioHistory.CT = [];
+            updateRadioUI();
+
+            const prev = state.players; 
+            state.players = [];
+            let T_NAMES = window.T_NAMES || [{n:'Player1', r:'Rifle'}, {n:'Player2', r:'Rifle'}, {n:'Player3', r:'Rifle'}, {n:'Player4', r:'Rifle'}, {n:'Player5', r:'AWP'}];
+            let CT_NAMES = window.CT_NAMES || [{n:'Player6', r:'Rifle'}, {n:'Player7', r:'AWP'}, {n:'Player8', r:'Rifle'}, {n:'Player9', r:'Rifle'}, {n:'Player10', r:'Rifle'}];
+            
+            // 保存当前队伍名称
+            const currentTTeamName = document.getElementById('t-team-name').innerText;
+            const currentCTTeamName = document.getElementById('ct-team-name').innerText;
+            
+            if (state.isSwapped) {
+                const temp = T_NAMES; T_NAMES = CT_NAMES; CT_NAMES = temp;
+                document.getElementById('t-team-name').innerText = currentCTTeamName;
+                document.getElementById('ct-team-name').innerText = currentTTeamName;
+                // 检查是否为大比分
+                const isBigScore = state.score.t >= 10 || state.score.ct >= 10 || Math.abs(state.score.t - state.score.ct) > 5;
+                if (!isBigScore) {
+                    document.getElementById('t-score-box').classList.replace('bg-orange-600', 'bg-blue-600');
+                    document.getElementById('ct-score-box').classList.replace('bg-blue-600', 'bg-orange-600');
+                }
+            } else {
+                // 保持当前队伍名称不变
+                // 检查是否为大比分
+                const isBigScore = state.score.t >= 10 || state.score.ct >= 10 || Math.abs(state.score.t - state.score.ct) > 5;
+                if (!isBigScore) {
+                    document.getElementById('t-score-box').classList.replace('bg-blue-600', 'bg-orange-600');
+                    document.getElementById('ct-score-box').classList.replace('bg-orange-600', 'bg-blue-600');
+                }
+            }
+
+            T_NAMES.forEach((cfg, i) => { 
+                const p = new Player('T', cfg, i); 
+                if(prev.length) { 
+                    p.kills = prev.find(old => old.name === cfg.n).kills; 
+                    p.deaths = prev.find(old => old.name === cfg.n).deaths; 
+                    p.money = prev.find(old => old.name === cfg.n).money; 
+                    const oldP = prev.find(old => old.name === cfg.n);
+                    if(oldP.isAlive && state.round !== 13 && state.round !== 1) {
+                        p.weapon = oldP.weapon;
+                        p.utility = { ...oldP.utility };
+                        p.armorType = oldP.armorType;
+                        p.ammo = oldP.ammo;
+                    }
+                } 
+                else { p.money = 800; }
+                if (state.round === 1 || state.round === 13) p.money = 800;
+                state.players.push(p); 
+            });
+            CT_NAMES.forEach((cfg, i) => { 
+                const p = new Player('CT', cfg, i+5); 
+                if(prev.length) { 
+                    p.kills = prev.find(old => old.name === cfg.n).kills; 
+                    p.deaths = prev.find(old => old.name === cfg.n).deaths; 
+                    p.money = prev.find(old => old.name === cfg.n).money; 
+                    const oldP = prev.find(old => old.name === cfg.n);
+                    if(oldP.isAlive && state.round !== 13 && state.round !== 1) {
+                        p.weapon = oldP.weapon;
+                        p.utility = { ...oldP.utility };
+                        p.armorType = oldP.armorType;
+                        p.ammo = oldP.ammo;
+                        p.hasKit = oldP.hasKit; 
+                    }
+                } 
+                else { p.money = 800; }
+                if (state.round === 1 || state.round === 13) p.money = 800;
+                state.players.push(p); 
+            });
+            
+            const carrier = state.players.filter(p=>p.team==='T')[0];
+            carrier.hasBomb = true; state.bomb.carrier = carrier;
+
+            // T方回合开始，指挥会命令一个有闪的人丢a小下闪光
+            setTimeout(() => {
+                // 找到T方的指挥（取第一个Rifle角色的选手作为指挥）
+                const tPlayers = state.players.filter(p => p.team === 'T');
+                const tCommanders = tPlayers.filter(p => p.role === 'Rifle');
+                const tLeader = tCommanders.length > 0 ? tCommanders[0] : tPlayers[0];
+                const tPlayersWithFlash = state.players.filter(p => 
+                    p.team === 'T' && p.isAlive && p.utility.flash > 0
+                );
+                
+                if (tLeader && tPlayersWithFlash.length > 0) {
+                    const flasher = tPlayersWithFlash[Math.floor(Math.random() * tPlayersWithFlash.length)];
+                    tLeader.broadcastRadio(`指挥：${flasher.name} 向 a小下 丢一颗闪光！`);
+                    
+                    // 让选手丢闪光
+                    if (flasher.utility.flash > 0) {
+                        flasher.utility.flash--;
+                        state.flashes.push(new Flash(flasher.team, flasher.x, flasher.y, 'a小下'));
+                        flasher.broadcastRadio(`收到，向 a小下 丢闪光！`);
+                    }
+                }
+                
+                // CT方回合开始，指挥会随机派1-3个有闪的人扔给匪口闪、中远闪、后花园闪、暗道闪、a门闪中的随机1~5个
+                const ctPlayers = state.players.filter(p => p.team === 'CT');
+                const ctCommanders = ctPlayers.filter(p => p.role === 'Rifle');
+                const ctLeader = ctCommanders.length > 0 ? ctCommanders[0] : ctPlayers[0];
+                const ctPlayersWithFlash = state.players.filter(p => 
+                    p.team === 'CT' && p.isAlive && p.utility.flash > 0
+                );
+                
+                if (ctLeader && ctPlayersWithFlash.length > 0) {
+                    // 闪光目标位置列表
+                    const flashTargets = ['匪口', '中远', '后花园', '暗道', 'a门'];
+                    // 随机选择1-5个目标位置
+                    const targetCount = Math.floor(Math.random() * 5) + 1;
+                    const selectedTargets = flashTargets.sort(() => 0.5 - Math.random()).slice(0, targetCount);
+                    // 随机选择1-3个有闪的人
+                    const playerCount = Math.min(Math.floor(Math.random() * 3) + 1, ctPlayersWithFlash.length);
+                    const selectedPlayers = ctPlayersWithFlash.sort(() => 0.5 - Math.random()).slice(0, playerCount);
+                    
+                    // 分配闪光任务
+                    selectedTargets.forEach((target, index) => {
+                        const player = selectedPlayers[index % selectedPlayers.length];
+                        if (player && player.utility.flash > 0) {
+                            ctLeader.broadcastRadio(`指挥：${player.name} 向 ${target} 丢一颗闪光！`);
+                            player.utility.flash--;
+                            state.flashes.push(new Flash(player.team, player.x, player.y, target));
+                            player.broadcastRadio(`收到，向 ${target} 丢闪光！`);
+                        }
+                    });
+                }
+            }, 1000);
+
+            ['T', 'CT'].forEach(team => {
+                const totalMoney = getTeamTotalMoney(team);
+                const teamPlayers = state.players.filter(p => p.team === team);
+                // 找到队伍的指挥（取第一个Rifle角色的选手作为指挥）
+                const commanders = teamPlayers.filter(p => p.role === 'Rifle');
+                const leader = commanders.length > 0 ? commanders[0] : teamPlayers[0];
+                let strategy = 'Full';
+                let heroPlayer = null;
+
+                if (state.round > 1 && state.round !== 13) {
+                    // 手枪局赢了，下一把必然全起或强起
+                    const isPistolWin = (state.round === 2 || state.round === 14);
+                    if (isPistolWin) {
+                        const rand = Math.random();
+                        if (rand < 0.7) strategy = 'Full';
+                        else strategy = 'Force';
+                    } else if (totalMoney < 15000) { 
+                        const rand = Math.random();
+                        if (rand < 0.4) strategy = 'Eco';
+                        else if (rand < 0.8) strategy = 'Force';
+                        else { strategy = 'Hero'; heroPlayer = [...teamPlayers].sort((a,b) => b.money - a.money)[0]; }
+                    } else if (totalMoney <= 25000) {
+                        strategy = Math.random() < 0.5 ? 'Half' : 'Full';
+                    } else { strategy = 'Full'; }
+                    const strategyNames = { 'Eco': 'ECO (纯经济局)', 'Force': 'FORCE BUY (强起局)', 'Hero': 'HERO WEAPON (英雄枪)', 'Half': 'HALF BUY (半起局)', 'Full': 'FULL BUY (全起局)' };
+                    if (leader) leader.broadcastRadio(`指挥：本局策略 - ${strategyNames[strategy]}！`);
+                }
+                teamPlayers.forEach(p => p.buy(strategy, p === heroPlayer));
+
+                if (team === 'T') {
+                    // 找到T方的指挥（取第一个Rifle角色的选手作为指挥）
+                    const tCommanders = teamPlayers.filter(p => p.role === 'Rifle');
+                    const tLeader = tCommanders.length > 0 ? tCommanders[0] : teamPlayers[0];
+                    if (tLeader) {
+                        const smoker = teamPlayers.find(p => p.utility.smoke > 0);
+                        if (smoker) {
+                            tLeader.broadcastRadio(`指挥：${smoker.name}，开局给一颗中门烟封锁视线！`);
+                            smoker.throwSmoke('中门');
+                        }
+                    }
+                }
+            });
+
+            updateHUD();
+        }
+
+        function checkRoundEnd() {
+            if (state.isRoundEnded) return;
+            const tAlive = state.players.filter(p => p.team === 'T' && p.isAlive).length;
+            const ctAlive = state.players.filter(p => p.team === 'CT' && p.isAlive).length;
+            if (ctAlive === 0) endRound('T', 'COUNTER-TERRORISTS ELIMINATED');
+            else if (tAlive === 0 && state.bomb.state !== 'planted') endRound('CT', 'TERRORISTS ELIMINATED');
+        }
+
+        function endRound(winner, reason) {
+            if (state.isRoundEnded) return;
+            
+            // 取消任何正在进行的炸弹安装操作
+            state.players.forEach(p => {
+                if (p.isPlanting) {
+                    p.isPlanting = false;
+                    state.bomb.state = 'idle';
+                    state.bomb.carrier = null;
+                    p.hasBomb = false;
+                }
+            });
+            
+            state.isRoundEnded = true; 
+            state.score[winner.toLowerCase()]++;
+            state.round++;
+            
+            // 播放胜利音效（炸弹拆除时不播放CT胜利音效，因为已经播放了炸弹拆除音效）
+            if (reason !== 'BOMB DEFUSED') {
+                if (winner === 'T') {
+                    WeaponSounds.play('t_win');
+                } else if (winner === 'CT') {
+                    WeaponSounds.play('ct_win');
+                }
+            }
+            
+            // 计算金钱补偿
+            let tBonus = 1400; let ctBonus = 1400;
+            if (winner === 'CT') {
+                // CT胜利
+                if (reason === 'BOMB DEFUSED') ctBonus = 3500;
+                else if (reason === 'TERRORISTS ELIMINATED') ctBonus = 3250;
+                else if (reason === 'TIME EXPIRED') ctBonus = 3250;
+                
+                // T败方补偿
+                state.consecutiveLosses.T = Math.min(state.consecutiveLosses.T + 1, 4);
+                tBonus = 1400 + (state.consecutiveLosses.T * 500);
+                tBonus = Math.min(tBonus, 3400);
+                
+                // CT胜利，减少连败数
+                state.consecutiveLosses.CT = Math.max(state.consecutiveLosses.CT - 2, 0);
+            } else {
+                // T胜利
+                if (reason === 'BOMB EXPLODED') tBonus = 3500;
+                else if (reason === 'COUNTER-TERRORISTS ELIMINATED') tBonus = 3250;
+                
+                // CT败方补偿
+                state.consecutiveLosses.CT = Math.min(state.consecutiveLosses.CT + 1, 4);
+                ctBonus = 1400 + (state.consecutiveLosses.CT * 500);
+                ctBonus = Math.min(ctBonus, 3400);
+                
+                // T胜利，减少连败数
+                state.consecutiveLosses.T = Math.max(state.consecutiveLosses.T - 2, 0);
+            }
+            state.players.forEach(p => {
+                if (p.team === 'T') p.money = Math.min(16000, p.money + tBonus);
+                else p.money = Math.min(16000, p.money + ctBonus);
+            });
+
+            let finalWinner = null;
+            const tTeamName = document.getElementById('t-team-name').innerText;
+            const ctTeamName = document.getElementById('ct-team-name').innerText;
+            if (state.score.t >= state.winTarget && state.score.t - state.score.ct >= 1) finalWinner = state.isSwapped ? ctTeamName.toUpperCase() : tTeamName.toUpperCase();
+            if (state.score.ct >= state.winTarget && state.score.ct - state.score.t >= 1) finalWinner = state.isSwapped ? tTeamName.toUpperCase() : ctTeamName.toUpperCase();
+
+            if (state.score.t === state.winTarget - 1 && state.score.ct === state.winTarget - 1) {
+                state.winTarget += 3; 
+            }
+
+            if (finalWinner) {
+                const banner = document.getElementById('victory-banner');
+                const inner = document.getElementById('victory-inner');
+                inner.innerText = `${finalWinner} IS THE CHAMPION!`;
+                inner.style.color = "gold";
+                banner.style.display = 'block';
+                state.running = false;
+                return;
+            }
+
+            if (state.round === 13) {
+                state.isSwapped = !state.isSwapped;
+                const tempScore = state.score.t; state.score.t = state.score.ct; state.score.ct = tempScore;
+            }
+
+            const banner = document.getElementById('victory-banner');
+            const inner = document.getElementById('victory-inner');
+            inner.innerText = winner === 'T' ? 'TERRORISTS WIN' : 'COUNTER-TERRORISTS WIN';
+            inner.style.color = winner === 'T' ? '#f97316' : '#3b82f6';
+            banner.style.display = 'block';
+            
+            // 等待5秒后进入下一局，不影响其他人的正常活动
+            setTimeout(() => {
+                if(state.running) {
+                    initRound();
+                }
+            }, 5000);
+        }
+
+    function handleTacticalSmokes(dt) {
+            if (state.isRoundEnded) return;
+            state.lastSmokeCheck += dt * state.speed;
+            if (state.lastSmokeCheck >= 30.0) {
+                state.lastSmokeCheck = 0;
+                
+                // 获取 CT 阵营存活选手
+                const ctAlive = state.players.filter(p => p.isAlive && p.team === 'CT');
+                // 获取对手（T 阵营）存活人数
+                const tAliveCount = state.players.filter(p => p.isAlive && p.team === 'T').length;
+                // 获取CT方的指挥（取第一个Rifle角色的选手作为指挥）
+                const ctCommanders = ctAlive.filter(p => p.role === 'Rifle');
+                const ctLeader = ctCommanders.length > 0 ? ctCommanders[0] : ctAlive[0];
+
+                // 只有当指挥官在场、CT 有人存活、且 T 阵营也有人存活时才丢道具
+                if (ctLeader && ctAlive.length > 0 && tAliveCount > 0) {
+                    const potentialNodes = ['a门', 'a小下', 'b2'];
+                    const count = Math.floor(Math.random() * 3) + 1; 
+                    const selectedNodes = potentialNodes.sort(() => 0.5 - Math.random()).slice(0, count);
+                    
+                    selectedNodes.forEach(node => {
+                        const smoker = ctAlive.find(p => p.utility.smoke > 0);
+                        if (smoker) { 
+                            smoker.throwSmoke(node); 
+                        }
+                    });
+                }
+            }
+        }
+
+        function handleMolotovThrows(dt) {
+            if (state.isRoundEnded) return;
+            
+            // 获取两队存活情况
+            const tAlive = state.players.filter(p => p.isAlive && p.team === 'T');
+            const ctAlive = state.players.filter(p => p.isAlive && p.team === 'CT');
+            
+            // 获取指挥官（取第一个Rifle角色的选手作为指挥）
+            const tCommanders = tAlive.filter(p => p.role === 'Rifle');
+            const ctCommanders = ctAlive.filter(p => p.role === 'Rifle');
+            const tLeader = tCommanders.length > 0 ? tCommanders[0] : tAlive[0];
+            const ctLeader = ctCommanders.length > 0 ? ctCommanders[0] : ctAlive[0];
+            
+            // 检查指定点位是否已有燃烧瓶
+            function isNodeHasMolotov(node) {
+                return state.molotovs.some(m => {
+                    if (!m.exploded) return false;
+                    const nodeDist = Math.sqrt((MAP_NODES[node].x - m.x)**2 + (MAP_NODES[node].y - m.y)**2);
+                    return nodeDist < 100 && m.life > 0;
+                });
+            }
+            
+            // 检查指定点位是否有队友停留
+            function isNodeHasTeammate(node, team) {
+                return state.players.some(p => {
+                    if (!p.isAlive || p.team !== team) return false;
+                    const nodeDist = Math.sqrt((MAP_NODES[node].x - p.x)**2 + (MAP_NODES[node].y - p.y)**2);
+                    return nodeDist < 100;
+                });
+            }
+            
+            // T方逻辑
+            if (tLeader && tAlive.length > 0) {
+                // 回合开始后的5s，向a小扔燃烧瓶（每局只发布一次指令）
+                if (state.time >= 110 && state.time < 115 && !state.hasReleasedStartMolotov) {
+                    if (Math.random() < 0.6 && !isNodeHasMolotov('a小下') && !isNodeHasTeammate('a小下', 'T')) {
+                        const molotovPlayer = tAlive.find(p => p.utility.fire > 0);
+                        if (molotovPlayer) {
+                            tLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 a小下 扔燃烧瓶！`);
+                            molotovPlayer.throwMolotov('a小下');
+                            state.hasReleasedStartMolotov = true; // 标记已经发布了指令
+                        }
+                    }
+                }
+                
+                // 进攻a点时，向a点扔火
+                if (tAlive.some(p => p.destination === 'a点')) {
+                    const currentTime = 115 - state.time;
+                    if (Math.random() < 0.6 && !isNodeHasMolotov('a点') && !isNodeHasTeammate('a点', 'T') && currentTime - state.lastAttackMolotovTime.a >= 10) {
+                        const molotovPlayer = tAlive.find(p => p.utility.fire > 0);
+                        if (molotovPlayer) {
+                            tLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 a点 扔燃烧瓶！`);
+                            molotovPlayer.throwMolotov('a点');
+                            state.lastAttackMolotovTime.a = currentTime;
+                        }
+                    }
+                }
+                
+                // 进攻b点时，向b点扔火
+                if (tAlive.some(p => p.destination === 'b点')) {
+                    const currentTime = 115 - state.time;
+                    if (Math.random() < 0.5 && !isNodeHasMolotov('b点') && !isNodeHasTeammate('b点', 'T') && currentTime - state.lastAttackMolotovTime.b >= 10) {
+                        const molotovPlayer = tAlive.find(p => p.utility.fire > 0);
+                        if (molotovPlayer) {
+                            tLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 b点 扔燃烧瓶！`);
+                            molotovPlayer.throwMolotov('b点');
+                            state.lastAttackMolotovTime.b = currentTime;
+                        }
+                    }
+                }
+                
+                // 下包完成后的5s
+                if (state.bomb.state === 'planted' && state.bomb.time >= 35 && state.bomb.time < 40) {
+                    if (state.bomb.node === 'a点') {
+                        // 向a大、沙地和a小扔火
+                        if (Math.random() < 0.6) {
+                            const targets = ['a大', '沙地', 'a小下'];
+                            // 过滤掉已有燃烧瓶或有队友的目标
+                            const availableTargets = targets.filter(target => !isNodeHasMolotov(target) && !isNodeHasTeammate(target, 'T'));
+                            if (availableTargets.length > 0) {
+                                const target = availableTargets[Math.floor(Math.random() * availableTargets.length)];
+                                const molotovPlayer = tAlive.find(p => p.utility.fire > 0);
+                                if (molotovPlayer) {
+                                    tLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 ${target} 扔燃烧瓶！`);
+                                    molotovPlayer.throwMolotov(target);
+                                }
+                            }
+                        }
+                    } else if (state.bomb.node === 'b点') {
+                        // 向b门扔火
+                        if (Math.random() < 0.7 && !isNodeHasMolotov('b门') && !isNodeHasTeammate('b门', 'T')) {
+                            const molotovPlayer = tAlive.find(p => p.utility.fire > 0);
+                            if (molotovPlayer) {
+                                tLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 b门 扔燃烧瓶！`);
+                                molotovPlayer.throwMolotov('b门');
+                            }
+                        }
+                        // 向狗洞扔火
+                        if (Math.random() < 0.7 && !isNodeHasMolotov('狗洞') && !isNodeHasTeammate('狗洞', 'T')) {
+                            const molotovPlayer = tAlive.find(p => p.utility.fire > 0);
+                            if (molotovPlayer) {
+                                tLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 狗洞 扔燃烧瓶！`);
+                                molotovPlayer.throwMolotov('狗洞');
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // CT方逻辑
+            if (ctLeader && ctAlive.length > 0) {
+                // 回合开始后5s（每局只发布一次指令）
+                if (state.time >= 110 && state.time < 115 && !state.hasReleasedStartMolotov) {
+                    // 向a门扔燃烧瓶
+                    if (Math.random() < 0.7 && !isNodeHasMolotov('a门') && !isNodeHasTeammate('a门', 'CT')) {
+                        const molotovPlayer = ctAlive.find(p => p.utility.fire > 0);
+                        if (molotovPlayer) {
+                            ctLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 a门 扔燃烧瓶！`);
+                            molotovPlayer.throwMolotov('a门');
+                            state.hasReleasedStartMolotov = true; // 标记已经发布了指令
+                        }
+                    }
+                    // 向匪口或者中远扔燃烧瓶
+                    if (Math.random() < 0.4 && !state.hasReleasedStartMolotov) {
+                        const target = Math.random() > 0.5 ? '匪口' : '中远';
+                        if (!isNodeHasMolotov(target) && !isNodeHasTeammate(target, 'CT')) {
+                            const molotovPlayer = ctAlive.find(p => p.utility.fire > 0);
+                            if (molotovPlayer) {
+                                ctLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 ${target} 扔燃烧瓶！`);
+                                molotovPlayer.throwMolotov(target);
+                                state.hasReleasedStartMolotov = true; // 标记已经发布了指令
+                            }
+                        }
+                    }
+                    // 向b2扔燃烧瓶
+                    if (Math.random() < 0.7 && !isNodeHasMolotov('b2') && !state.hasReleasedStartMolotov && !isNodeHasTeammate('b2', 'CT')) {
+                        const molotovPlayer = ctAlive.find(p => p.utility.fire > 0);
+                        if (molotovPlayer) {
+                            ctLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 b2 扔燃烧瓶！`);
+                            molotovPlayer.throwMolotov('b2');
+                            state.hasReleasedStartMolotov = true; // 标记已经发布了指令
+                        }
+                    }
+                }
+                
+                // 若a点已经下包，向a点扔火
+                if (state.bomb.state === 'planted' && state.bomb.node === 'a点') {
+                    if (Math.random() < 0.6 && !isNodeHasMolotov('a点') && !isNodeHasTeammate('a点', 'CT')) {
+                        const molotovPlayer = ctAlive.find(p => p.utility.fire > 0);
+                        if (molotovPlayer) {
+                            ctLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 a点 扔燃烧瓶！`);
+                            molotovPlayer.throwMolotov('a点');
+                        }
+                    }
+                }
+                
+                // 若b点已经下包，向b点扔火
+                if (state.bomb.state === 'planted' && state.bomb.node === 'b点') {
+                    if (Math.random() < 0.6 && !isNodeHasMolotov('b点') && !isNodeHasTeammate('b点', 'CT')) {
+                        const molotovPlayer = ctAlive.find(p => p.utility.fire > 0);
+                        if (molotovPlayer) {
+                            ctLeader.broadcastRadio(`指挥：${molotovPlayer.name} 向 b点 扔燃烧瓶！`);
+                            molotovPlayer.throwMolotov('b点');
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkReorganizeTactics(dt) {
+            if (state.isRoundEnded) return;
+
+            // 预先获取两队存活情况，用于后续判断
+            const tAlive = state.players.filter(p => p.isAlive && p.team === 'T');
+            const ctAlive = state.players.filter(p => p.isAlive && p.team === 'CT');
+            if (state.bomb.state !== 'planted' && ctAlive.length > 0 && ctAlive.every(p => p.isIdle())) {
+                // 检查是否有一个点是无人的
+                const aPointPlayers = ctAlive.filter(p => p.posNode === 'a点');
+                const bPointPlayers = ctAlive.filter(p => p.posNode === 'b点');
+                const hasEmptySite = aPointPlayers.length === 0 || bPointPlayers.length === 0;
+                
+                if (hasEmptySite) {
+                    // 指挥会命令一半的人守a点，一半的人守b点
+                    ctAlive.forEach((p, idx) => {
+                        const targetSite = idx < Math.ceil(ctAlive.length / 2) ? 'a点' : 'b点';
+                        p.destination = targetSite;
+                        p.path = findPath(p.posNode, targetSite);
+                        p.pathIdx = 0;
+                        // 守点选手的状态也被视为空闲，即视角朝向任意来路
+                        // 不需要特殊标记，因为到达目标点后，他们会进入空闲状态
+                        // 空闲状态下，moveAlongPath方法会自动处理视角朝向任意来路
+                    });
+                }
+            }
+
+            // --- 情况 1：C4 已安放（处理 CT 回防道具和移动） ---
+            if (state.bomb.state === 'planted') {
+                state.lastRetakeFlashCheck += dt * state.speed;
+                if (state.lastRetakeFlashCheck >= 5.0) {
+                    state.lastRetakeFlashCheck = 0;
+                    // 找到CT方的指挥（取第一个Rifle角色的选手作为指挥）
+                    const ctCommanders = ctAlive.filter(p => p.role === 'Rifle');
+                    const ctLeader = ctCommanders.length > 0 ? ctCommanders[0] : ctAlive[0];
+                    const flasher = state.players.find(p => p.isAlive && p.team === 'CT' && p.utility.flash > 0);
+                    
+                    // 只有当指挥官在场、有 CT 存活且能丢闪，并且 T 阵营有人活着守包时才丢
+                    if (ctLeader && flasher && tAlive.length > 0) { 
+                        flasher.throwFlash(state.bomb.node); 
+                    }
+                }
+                
+                // CT 回防逻辑：所有存活的 CT 队员都应该前往炸弹位置
+                if (ctAlive.length > 0) {
+                    // 找到CT方的指挥（取第一个Rifle角色的选手作为指挥）
+                    const ctCommanders = ctAlive.filter(p => p.role === 'Rifle');
+                    const ctLeader = ctCommanders.length > 0 ? ctCommanders[0] : ctAlive[0];
+                    ctAlive.forEach(p => {
+                        if (p.destination !== state.bomb.node) {
+                            p.destination = state.bomb.node;
+                            p.path = findPath(p.posNode, state.bomb.node);
+                            p.pathIdx = 0;
+                            if (ctLeader) {
+                                ctLeader.broadcastRadio(`指挥：${p.name} 回防 ${state.bomb.node}！`);
+                            }
+                        }
+                    });
+                }
+                
+                // 拆包时 T 队回防逻辑：当有人开始拆包时，所有存活的 T 队队员都应该返回包点
+                if (state.bomb.defuser) {
+                    // 找到T方的指挥（取第一个Rifle角色的选手作为指挥）
+                    const tCommanders = tAlive.filter(p => p.role === 'Rifle');
+                    const tLeader = tCommanders.length > 0 ? tCommanders[0] : tAlive[0];
+                    tAlive.forEach(p => {
+                        if (p.destination !== state.bomb.node) {
+                            p.destination = state.bomb.node;
+                            p.path = findPath(p.posNode, state.bomb.node);
+                            p.pathIdx = 0;
+                            if (tLeader) {
+                                tLeader.broadcastRadio(`指挥：有人在拆包！${p.name} 立即回防 ${state.bomb.node}！`);
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // --- 情况 2：战术重组与进攻（每 5 秒检查一次） ---
+            state.lastTacticCheck += dt * state.speed;
+            if (state.lastTacticCheck >= 5.0) {
+                state.lastTacticCheck = 0;
+                
+                // 如果包已经落位，不再执行本段逻辑（包已安放逻辑在上方处理）
+                if (state.bomb.state === 'planted') return;
+                
+                // 找到T方的指挥（取第一个Rifle角色的选手作为指挥）
+                const tCommanders = tAlive.filter(p => p.role === 'Rifle');
+                const tLeader = tCommanders.length > 0 ? tCommanders[0] : tAlive[0];
+                if (tAlive.length === 0 || !tLeader) return;
+
+                // 2a. 如果包掉地上了，指派最近的 T 去捡包（这属于基础逻辑，不依赖敌人是否存活）
+                if (state.bomb.state === 'idle' && !state.bomb.carrier) {
+                    let nearestPlayer = null; let minDist = Infinity;
+                    tAlive.forEach(p => {
+                        const d = Math.sqrt((p.x - state.bomb.x)**2 + (p.y - state.bomb.y)**2);
+                        if (d < minDist) { minDist = d; nearestPlayer = p; }
+                    });
+                    if (nearestPlayer && !nearestPlayer.tempTarget) {
+                        nearestPlayer.path = findPath(nearestPlayer.posNode, state.bomb.node);
+                        nearestPlayer.pathIdx = 0; nearestPlayer.tempTarget = { x: state.bomb.x, y: state.bomb.y };
+                    }
+                } 
+                // 2b. T 阵营全员处于空闲（准备组织下一波进攻）
+                else {
+                    // 排除正在防守的队员
+                    const nonDefendingTAlive = tAlive.filter(p => !p.isDefending);
+                    if (nonDefendingTAlive.length > 0 && nonDefendingTAlive.every(p => p.isIdle())) {
+                    const targetSite = Math.random() > 0.5 ? 'a点' : 'b点';
+                    
+                    // 修正：只有当 CT 阵营有人存活（有人防守）时，T 阵营才丢烟雾干扰
+                    if (ctAlive.length > 0) {
+                        let smokers = tAlive.filter(p => p.utility.smoke > 0);
+                        if (targetSite === 'b点') {
+                            if (smokers[0]) smokers[0].throwSmoke('b门');
+                            if (smokers[1]) smokers[1].throwSmoke('狗洞');
+                        } else {
+                            if (smokers[0]) smokers[0].throwSmoke('警家');
+                            if (smokers[1]) smokers[1].throwSmoke('a小下');
+                        }
+                    }
+                    
+                    // 无论有没有敌人，T 阵营在空闲时都需要向包点移动（为了埋包）
+                    nonDefendingTAlive.forEach(p => { 
+                        p.destination = targetSite; 
+                        p.path = findPath(p.posNode, targetSite); 
+                        p.pathIdx = 0; 
+                    });
+                }
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0,0,1000,700);
+            ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 20; ctx.lineCap='round';
+            Object.values(MAP_NODES).forEach(n => n.links.forEach(l => { ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(MAP_NODES[l].x, MAP_NODES[l].y); ctx.stroke(); }));
+            Object.keys(MAP_NODES).forEach(key => {
+                const node = MAP_NODES[key];
+                if (node.type === 'site') { ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(node.x, node.y, 40, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+                ctx.fillStyle = 'white'; ctx.font = '10px Roboto Mono'; ctx.textAlign = 'center'; ctx.fillText(key.toUpperCase(), node.x, node.y + 25);
+            });
+
+            state.droppedWeapons.forEach(dw => dw.draw(ctx));
+
+            if (state.bomb.state === 'idle' && !state.bomb.carrier) { ctx.fillStyle = '#ef4444'; ctx.fillRect(state.bomb.x-8, state.bomb.y-8, 16, 16); }
+            else if (state.bomb.state === 'planted') { ctx.fillStyle = '#ef4444'; ctx.fillRect(state.bomb.x-10, state.bomb.y-5, 20, 10); }
+            
+            state.smokes.forEach(s => s.draw(ctx));
+            state.flashes.forEach(f => f.draw(ctx));
+            if (state.molotovs) {
+                state.molotovs.forEach(m => m.draw(ctx));
+            }
+            state.tracers.forEach((t, i) => { ctx.strokeStyle = `rgba(255, 255, 120, ${t.life * 10})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2); ctx.stroke(); t.life -= 0.01 * state.speed; if(t.life <= 0) state.tracers.splice(i, 1); });
+            
+            // 绘制开火特效
+            if (state.fireEffects) {
+                state.fireEffects.forEach(effect => {
+                    ctx.save();
+                    ctx.globalAlpha = effect.life * 10;
+                    ctx.fillStyle = 'orange';
+                    ctx.beginPath();
+                    ctx.arc(effect.x, effect.y, effect.size * effect.life * 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = 'yellow';
+                    ctx.beginPath();
+                    ctx.arc(effect.x, effect.y, effect.size * 0.5 * effect.life * 10, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+            }
+            
+            state.players.forEach(p => {
+                if (!p.isAlive) return;
+                ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+                if (p.blindTimer <= 0) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0, p.viewDistance, -p.viewAngle/2, p.viewAngle/2); ctx.closePath(); ctx.fill();
+                }
+                ctx.restore();
+                let baseColor = p.team === 'T' ? [249, 115, 22] : [59, 130, 246];
+                let colorStr = p.blindTimer > 0 ? `rgb(255,255,255)` : `rgb(${baseColor[0]},${baseColor[1]},${baseColor[2]})`;
+                ctx.fillStyle = p.hitFlash > 0 ? `rgba(255,0,0,${p.hitFlash})` : colorStr;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke();
+                if(p.hasBomb) { ctx.fillStyle='red'; ctx.fillRect(p.x-4,p.y-4,8,8); }
+                ctx.fillStyle = 'white'; ctx.font = 'bold 9px Oswald'; ctx.textAlign = 'center'; ctx.fillText(p.name, p.x, p.y - 15);
+            });
+            
+            // 绘制手雷和爆炸特效在最顶层
+            if (state.grenades) {
+                state.grenades.forEach(g => g.draw(ctx));
+            }
+        }
+
+        function updateHUD() {
+            const tH = document.getElementById('t-hud'), ctH = document.getElementById('ct-hud');
+            tH.innerHTML = ''; ctH.innerHTML = '';
+            state.players.forEach(p => {
+                const card = document.createElement('div');
+                
+                // 计算血量百分比
+                const hpPercent = Math.ceil(p.hp);
+                // 根据阵营决定颜色
+                const teamColor = p.team === 'T' ? '#f97316' : '#3b82f6'; 
+                
+                // 核心修改：使用 linear-gradient 将背景做成血量条
+                // 从左到右：teamColor 占据 hpPercent 的位置，剩余部分为黑色(rgba(0,0,0,0.8))
+                card.style.background = `linear-gradient(to right, ${teamColor}99 ${hpPercent}%, rgba(0,0,0,0.8) ${hpPercent}%)`;
+                
+                card.className = `border-l-4 ${p.team==='T'?'border-orange-500':'border-blue-500'} px-3 py-1 flex flex-col justify-center gap-1 shadow-lg transition-all duration-300 ${!p.isAlive?'opacity-20 translate-y-1 grayscale':''}`;
+                
+                let extra = p.hasBomb ? `<span class="bg-red-600 px-1 rounded text-[10px] ml-2">BOMB</span>` : "";
+                if(p.hasKit) extra += `<span class="bg-blue-600 px-1 rounded text-[10px] ml-2">KIT</span>`;
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-center relative z-10">
+                        <span class="text-[14px] font-bold text-white shadow-sm">${p.name} ${p.id ? `(#${p.id})` : ''} - ${hpPercent}HP ${extra}</span>
+                    </div>
+                    <div class="flex justify-between text-[11px] text-white/90 font-bold border-t border-white/10 pt-1 relative z-10">
+                        <span>${p.kills}/${p.deaths} - ${p.weapon}</span>
+                    </div>
+                    <div class="flex justify-between text-[10px] tracking-tighter relative z-10">
+                        <span class="text-yellow-400 font-bold">$${p.money}</span>
+                        <div class="flex items-center gap-1">
+                            <!-- 显示道具 -->
+                            <span>${'☁'.repeat(p.utility.smoke)}</span>
+                            <span>${'🔥'.repeat(p.utility.fire)}</span>
+                            <span>${'💣'.repeat(p.utility.nade)}</span>
+                            <span>${'🧨'.repeat(p.utility.flash)}</span>
+                            <!-- 显示护甲 -->
+                            <span class="text-white font-bold uppercase ml-2">${p.armorType}</span>
+                        </div>
+                    </div>
+                `;
+                (p.team === 'T' ? tH : ctH).appendChild(card);
+            });
+            
+            // 计时器和比分部分逻辑保持不变
+            const timerEl = document.getElementById('timer');
+            if (state.bomb.state === 'planted') timerEl.innerText = `${state.bomb.time.toFixed(1)}s`;
+            else timerEl.innerText = `${Math.floor(state.time/60)}:${Math.floor(state.time%60).toString().padStart(2,'0')}`;
+            document.getElementById('score-t').innerText = state.score.t;
+            document.getElementById('score-ct').innerText = state.score.ct;
+        }
+
+        function handleNadeThrows(dt) {
+            if (state.isRoundEnded) return;
+            state.lastNadeTime += dt * state.speed;
+            if (state.lastNadeTime >= 20.0) {
+                state.lastNadeTime = 0;
+                
+                // T方手雷投掷
+                const tAlive = state.players.filter(p => p.isAlive && p.team === 'T');
+                // 找到T方的指挥（取第一个Rifle角色的选手作为指挥）
+                const tLeaders = tAlive.filter(p => p.role === 'Rifle');
+                const tNadePlayers = tAlive.filter(p => p.utility.nade > 0);
+                
+                if (tLeaders.length > 0 && tNadePlayers.length > 0) {
+                    const tLeader = tLeaders[0];
+                    // 选择1~2个有手雷的人
+                    const count = Math.min(2, tNadePlayers.length);
+                    const selectedPlayers = tNadePlayers.sort(() => 0.5 - Math.random()).slice(0, count);
+                    // T方投掷地点：a小下、a门外和b点
+                    const tTargets = ['a小下', 'a门外', 'b点'];
+                    
+                    selectedPlayers.forEach((player, index) => {
+                        // 随机选择一个地点
+                        const target = tTargets[Math.floor(Math.random() * tTargets.length)];
+                        // 获取目标点位坐标
+                        const targetNode = MAP_NODES[target];
+                        
+                        // 检查目标点位是否有队友
+                        const hasTeammate = state.players.some(p => 
+                            p.isAlive && p.team === player.team && 
+                            Math.sqrt((p.x - targetNode.x)**2 + (p.y - targetNode.y)**2) < 50
+                        );
+                        
+                        if (!hasTeammate) {
+                            // 投掷手雷
+                            player.utility.nade--;
+                            state.grenades.push(new Grenade(player.team, player, player.x, player.y, targetNode.x, targetNode.y));
+                            player.broadcastRadio(`投掷手雷至 ${target}！`);
+                            tLeader.broadcastRadio(`指挥：${player.name} 向 ${target} 投掷手雷！`);
+                        } else {
+                            tLeader.broadcastRadio(`指挥：${target} 有队友，取消手雷投掷！`);
+                        }
+                    });
+                }
+                
+                // CT方手雷投掷
+                const ctAlive = state.players.filter(p => p.isAlive && p.team === 'CT');
+                // 找到CT方的指挥（取第一个Rifle角色的选手作为指挥）
+                const ctLeaders = ctAlive.filter(p => p.role === 'Rifle');
+                const ctNadePlayers = ctAlive.filter(p => p.utility.nade > 0);
+                
+                if (ctLeaders.length > 0 && ctNadePlayers.length > 0) {
+                    const ctLeader = ctLeaders[0];
+                    // 选择1~2个有手雷的人
+                    const count = Math.min(2, ctNadePlayers.length);
+                    const selectedPlayers = ctNadePlayers.sort(() => 0.5 - Math.random()).slice(0, count);
+                    // CT方投掷地点：b1、中远、a门
+                    const ctTargets = ['b1', '中远', 'a门'];
+                    
+                    selectedPlayers.forEach((player, index) => {
+                        // 随机选择一个地点
+                        const target = ctTargets[Math.floor(Math.random() * ctTargets.length)];
+                        // 获取目标点位坐标
+                        const targetNode = MAP_NODES[target];
+                        
+                        // 检查目标点位是否有队友
+                        const hasTeammate = state.players.some(p => 
+                            p.isAlive && p.team === player.team && 
+                            Math.sqrt((p.x - targetNode.x)**2 + (p.y - targetNode.y)**2) < 50
+                        );
+                        
+                        if (!hasTeammate) {
+                            // 投掷手雷
+                            player.utility.nade--;
+                            state.grenades.push(new Grenade(player.team, player, player.x, player.y, targetNode.x, targetNode.y));
+                            player.broadcastRadio(`投掷手雷至 ${target}！`);
+                            ctLeader.broadcastRadio(`指挥：${player.name} 向 ${target} 投掷手雷！`);
+                        } else {
+                            ctLeader.broadcastRadio(`指挥：${target} 有队友，取消手雷投掷！`);
+                        }
+                    });
+                }
+            }
+        }
+
+        function loop(now) {
+            const dt = (now - state.lastTick) / 1000;
+            state.lastTick = now;
+            if (state.running && dt < 0.5) {
+                if (!state.isRoundEnded) {
+                    if (state.bomb.state === 'planted') {
+                        state.bomb.time -= dt * state.speed;
+                        if (state.bomb.time <= 0) {
+                            // c4爆炸音效
+                            WeaponSounds.play('c4_explode');
+                            
+                            // c4爆炸伤害：150-距离（如果是正数）
+                            state.players.forEach(p => {
+                                if (p.isAlive) {
+                                    const dist = Math.sqrt((p.x - state.bomb.x)**2 + (p.y - state.bomb.y)**2);
+                                    const damage = Math.max(0, 150 - dist);
+                                    if (damage > 0) {
+                                        p.hp -= damage;
+                                        p.hitFlash = 1.0;
+                                        
+                                        if (p.hp <= 0) {
+                                            p.hp = 0;
+                                            p.isAlive = false;
+                                            p.deaths++;
+                                            
+                                            if (WEAPONS[p.weapon].isMain) {
+                                                state.droppedWeapons.push(new DroppedWeapon(p.weapon, p.x, p.y));
+                                            }
+                                            
+                                            if (p.isPlanting) {
+                                                state.bomb.state = 'idle';
+                                                state.bomb.carrier = null;
+                                                state.bomb.x = p.x;
+                                                state.bomb.y = p.y;
+                                                state.bomb.node = p.posNode;
+                                                p.hasBomb = false;
+                                            }
+                                            if (p.hasBomb) {
+                                                state.bomb.carrier = null;
+                                                state.bomb.x = p.x;
+                                                state.bomb.y = p.y;
+                                                state.bomb.node = p.posNode;
+                                                p.hasBomb = false;
+                                            }
+                                            if (state.bomb.defuser === p) {
+                                                state.bomb.defuser = null;
+                                                state.bomb.defuseProgress = 0;
+                                                document.getElementById('defuse-bar-bg').classList.add('hidden');
+                                            }
+                                            
+                                            addKillFeed({ name: '💣', team: 'T' }, p, '💣', false);
+                                            checkRoundEnd();
+                                        }
+                                    }
+                                }
+                            });
+                            
+                            endRound('T', 'BOMB EXPLODED');
+                        }
+                        
+                        // c4还有10秒倒计时且视野里没有敌人时的逃跑逻辑
+                        if (state.bomb.time <= 10 && state.bomb.time > 9.5) {
+                            state.players.forEach(p => {
+                                if (p.isAlive && p.team === 'CT' && p !== state.bomb.defuser) {
+                                    // 检查视野里是否有敌人
+                                    const visibleEnemies = state.players.filter(e => 
+                                        e.isAlive && e.team !== p.team && p.canSee(e)
+                                    );
+                                    
+                                    if (visibleEnemies.length === 0) {
+                                        let escapeTargets = [];
+                                        if (state.bomb.node === 'a点') {
+                                            // a包：朝中路、a门外、b点中的随机一个地方逃跑
+                                            escapeTargets = ['中路', 'a门外', 'b点'];
+                                        } else if (state.bomb.node === 'b点') {
+                                            // b包：朝警家、后花园中的随机一个逃跑
+                                            escapeTargets = ['警家', '后花园'];
+                                        }
+                                        
+                                        if (escapeTargets.length > 0) {
+                                            const target = escapeTargets[Math.floor(Math.random() * escapeTargets.length)];
+                                            p.destination = target;
+                                            p.path = findPath(p.posNode, target);
+                                            p.pathIdx = 1;
+                                            p.broadcastRadio(`C4即将爆炸，逃往 ${target}！`);
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                        
+                        // 炸弹滴声逻辑
+                        if (state.bomb.lastBeep !== undefined) {
+                            state.bomb.lastBeep += dt * state.speed;
+                            
+                            // 根据剩余时间调整滴声间隔
+                            if (state.bomb.time > 20) {
+                                state.bomb.beepInterval = 800; // 前20秒：0.8秒
+                            } else if (state.bomb.time > 10) {
+                                state.bomb.beepInterval = 600; // 20-30秒：0.6秒
+                            } else if (state.bomb.time > 5) {
+                                state.bomb.beepInterval = 400; // 30-35秒：0.4秒
+                            } else {
+                                state.bomb.beepInterval = 200; // 35-40秒：0.2秒
+                            }
+                            
+                            // 播放滴声
+                            if (state.bomb.lastBeep >= state.bomb.beepInterval / 1000) {
+                                WeaponSounds.play('c4_beep');
+                                state.bomb.lastBeep = 0;
+                            }
+                        }
+                    } else {
+                        state.time -= dt * state.speed;
+                        if (state.time <= 0) endRound('CT', 'TIME EXPIRED');
+                        
+                        // CT开局后第10秒，指挥命令一个有火的人丢b2火
+                        if (state.time >= 104 && state.time <= 105 && !state.hasReleasedCTB2Fire) {
+                            // 找到CT方的指挥（取第一个Rifle角色的选手作为指挥）
+                            const ctPlayers = state.players.filter(p => p.team === 'CT');
+                            const ctCommanders = ctPlayers.filter(p => p.role === 'Rifle');
+                            const ctLeader = ctCommanders.length > 0 ? ctCommanders[0] : ctPlayers[0];
+                            const ctPlayersWithFire = state.players.filter(p => 
+                                p.team === 'CT' && p.isAlive && p.utility.fire > 0
+                            );
+                            
+                            if (ctLeader && ctPlayersWithFire.length > 0) {
+                                const firePlayer = ctPlayersWithFire[Math.floor(Math.random() * ctPlayersWithFire.length)];
+                                ctLeader.broadcastRadio(`指挥：${firePlayer.name} 向 b2 丢燃烧瓶！`);
+                                firePlayer.utility.fire--;
+                                state.molotovs.push(new Molotov(firePlayer.team, firePlayer, firePlayer.x, firePlayer.y, 'b2'));
+                                firePlayer.broadcastRadio(`收到，向 b2 丢燃烧瓶！`);
+                                state.hasReleasedCTB2Fire = true;
+                            }
+                        }
+                        
+                        // T方指挥开局50%概率派一名选手丢a小上雷或者a小下雷
+                        if (state.time >= 110 && state.time <= 111 && !state.hasReleasedStartNade) {
+                            if (Math.random() < 0.5) { // 50%概率
+                                // 找到T方的指挥（取第一个Rifle角色的选手作为指挥）
+                                const tPlayers = state.players.filter(p => p.team === 'T');
+                                const tCommanders = tPlayers.filter(p => p.role === 'Rifle');
+                                const tLeader = tCommanders.length > 0 ? tCommanders[0] : tPlayers[0];
+                                const tPlayersWithNade = state.players.filter(p => 
+                                    p.team === 'T' && p.isAlive && p.utility.nade > 0
+                                );
+                                
+                                if (tLeader && tPlayersWithNade.length > 0) {
+                                    const nadePlayer = tPlayersWithNade[Math.floor(Math.random() * tPlayersWithNade.length)];
+                                    // 随机选择a小上或a小下
+                                    const targetNode = Math.random() > 0.5 ? 'a小上' : 'a小下';
+                                    tLeader.broadcastRadio(`指挥：${nadePlayer.name} 向 ${targetNode} 丢手雷！`);
+                                    nadePlayer.utility.nade--;
+                                    const target = MAP_NODES[targetNode];
+                                    state.grenades.push(new Grenade(nadePlayer.team, nadePlayer, nadePlayer.x, nadePlayer.y, target.x, target.y));
+                                    nadePlayer.broadcastRadio(`收到，向 ${targetNode} 丢手雷！`);
+                                }
+                            }
+                            state.hasReleasedStartNade = true;
+                        }
+                    }
+                    handleTacticalSmokes(dt);
+                    handleMolotovThrows(dt);
+                    handleNadeThrows(dt);
+                    checkReorganizeTactics(dt);
+                }
+                state.smokes.forEach((s, i) => { s.update(dt * state.speed); if (s.life <= 0) state.smokes.splice(i, 1); });
+                state.flashes.forEach((f, i) => { f.update(dt * state.speed); if (f.exploded && f.flashLife <= 0) state.flashes.splice(i, 1); });
+                if (state.molotovs) {
+                    state.molotovs.forEach((m, i) => { m.update(dt * state.speed); if (m.exploded && m.life <= 0) state.molotovs.splice(i, 1); });
+                }
+                if (state.grenades) {
+                    state.grenades.forEach((g, i) => { g.update(dt * state.speed); if (g.exploded && g.explosionTime >= 1) state.grenades.splice(i, 1); });
+                }
+                
+                // 更新开火特效
+                if (state.fireEffects) {
+                    state.fireEffects = state.fireEffects.filter(effect => {
+                        effect.life -= dt * state.speed;
+                        return effect.life > 0;
+                    });
+                }
+                
+                state.players.forEach(p => p.update(dt, now));
+                updateHUD();
+            }
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        document.getElementById('btn-start').addEventListener('click', () => { if (state.players.length === 0) initRound(); state.running = !state.running; state.lastTick = performance.now(); document.getElementById('btn-start').innerText = state.running ? "暂停模拟" : "恢复模拟"; });
+        document.getElementById('btn-speed').addEventListener('click', () => { state.speed = state.speed >= 4 ? 1 : state.speed * 2; document.getElementById('btn-speed').innerText = `速度: ${state.speed}x`; });
+        initRound(); requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
