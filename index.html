@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CS2 Pro Simulator</title>
+    <title>CS2 Pro Simulator - 2D Shadow View</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Roboto+Mono:wght@400;700&display=swap');
@@ -87,6 +87,7 @@
         <button id="btn-start" class="bg-orange-600 hover:bg-orange-500 text-white text-xs px-4 py-2 rounded font-bold transition-all uppercase shadow-lg">开始模拟</button>
         <button id="btn-speed" class="bg-slate-800 hover:bg-slate-700 text-white text-[10px] px-4 py-1.5 rounded border border-slate-600 transition-all">速度: 1x</button>
         <button onclick="toggleRadio()" class="bg-slate-800 hover:bg-slate-700 px-4 py-1.5 rounded text-[10px] border border-slate-600 text-white">无线电窗</button>
+        <button onclick="toggleHUD()" class="bg-slate-800 hover:bg-slate-700 px-4 py-1.5 rounded text-[10px] border border-slate-600 text-white">隐藏选手UI</button>
     </div>
 
     <div class="fixed top-0 w-full flex justify-center pt-2 z-40 pointer-events-none">
@@ -121,7 +122,6 @@
         <div id="ct-hud" class="flex-1 grid grid-cols-1 gap-2 max-w-[360px]"></div>
     </div>
 
-    <!-- 游戏开始画面 -->
     <div id="start-screen" class="fixed inset-0 bg-black/90 flex items-center justify-center z-100">
         <div class="bg-slate-900 border border-slate-700 rounded-lg p-6 w-96">
             <h1 class="text-2xl font-bold text-center mb-6 text-white">CS2 比赛模拟器</h1>
@@ -158,13 +158,12 @@
                 </select>
             </div>
             
-            <!-- 自定义队伍选项 -->
             <div id="custom-options" class="mb-6 hidden">
                 <h3 class="text-sm font-bold text-white mb-3">自定义队伍</h3>
                 
                 <div class="mb-3">
                     <label class="block text-xs text-slate-400 mb-1">T 方队伍名</label>
-                    <input type="text" id="t-team-name" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-sm" placeholder="输入队伍名">
+                    <input type="text" id="t-team-name-input" class="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1 text-white text-sm" placeholder="输入队伍名">
                 </div>
                 
                 <div class="mb-3">
@@ -194,11 +193,6 @@
             
             <button id="btn-start-game" class="w-full bg-orange-600 hover:bg-orange-500 text-white py-2 rounded font-bold transition-all uppercase shadow-lg">开始游戏</button>
         </div>
-    </div>
-
-    <div class="fixed bottom-4 w-full px-8 flex justify-between gap-8 pointer-events-none z-40">
-        <div id="t-hud" class="flex-1 grid grid-cols-1 gap-2 max-w-[360px]"></div>
-        <div id="ct-hud" class="flex-1 grid grid-cols-1 gap-2 max-w-[360px]"></div>
     </div>
 
     <script>
@@ -253,7 +247,7 @@
             
             // 设置 T 方队伍
             if (tTeam === 'custom') {
-                const teamName = document.getElementById('t-team-name').value || 'Custom T';
+                const teamName = document.getElementById('t-team-name-input').value || 'Custom T';
                 T_NAMES = [
                     {n: document.getElementById('t-player-1').value || 'Sniper', r: 'AWP'},
                     {n: document.getElementById('t-player-2').value || 'IGL', r: 'Rifle'},
@@ -303,23 +297,180 @@
             'b2': { x: 100, y: 350, links: ['b点', '后花园', 'b1'], isOnFire: false },
             '狗洞': { x: 250, y: 100, links: ['b点', '沙地'], isOnFire: false },
             'b门': { x: 250, y: 220, links: ['b点', '沙地'], isOnFire: false },
-            '沙地': { x: 450, y: 180, links: ['狗洞', 'b门', '中门', '警家'], isOnFire: false },
+            '沙地': { x: 450, y: 200, links: ['狗洞', 'b门', '中门', '警家'], isOnFire: false },
             '后花园': { x: 100, y: 550, links: ['b2', '匪家', '匪口'], isOnFire: false },
-            'b1': { x: 250, y: 350, links: ['b2', '中路'], isOnFire: false },
-            '中门': { x: 450, y: 300, links: ['沙地', '中路'], isOnFire: false },
-            '中路': { x: 450, y: 450, links: ['b1', '中门', '中远', '暗道'], isOnFire: false },
-            '中远': { x: 520, y: 550, links: ['中路', 'a小下', '暗道', '匪口'], isOnFire: false },
-            '警家': { x: 650, y: 250, links: ['沙地', 'a小上', 'a大'], type: 'spawn', isOnFire: false },
-            'a小下': { x: 650, y: 450, links: ['中远', 'a小上'], isOnFire: false },
-            'a小上': { x: 650, y: 350, links: ['a小下', '警家', 'a点'], isOnFire: false },
-            '暗道': { x: 350, y: 550, links: ['匪家', '中远', '中路'], isOnFire: false },
+            'b1': { x: 250, y: 350, links: ['b2', '中门'], isOnFire: false },
+            '中门': { x: 450, y: 300, links: ['b1', '沙地', '中路', 'catwalk'], isOnFire: false },
+            '中路': { x: 450, y: 450, links: ['中门', '中远', '暗道'], isOnFire: false },
+            '中远': { x: 520, y: 550, links: ['中路', 'catwalk', '暗道', '匪口'], isOnFire: false },
+            '警家': { x: 650, y: 200, links: ['沙地', 'a大', '忍者位下'], type: 'spawn', isOnFire: false },
+            'a小下': { x: 650, y: 300, links: ['catwalk', 'a小上'], isOnFire: false },
+            'a小上': { x: 650, y: 100, links: ['a小下', 'a点', '忍者位上'], isOnFire: false },
+            '忍者位下': { x: 700, y: 200, links: ['警家', '忍者位上'], isOnFire: false },
+            '忍者位上': { x: 700, y: 100, links: ['忍者位下', 'a小上'], isOnFire: false },
+            '暗道': { x: 450, y: 550, links: ['匪家', '中远', '中路'], isOnFire: false },
             '匪口': { x: 600, y: 600, links: ['中远', 'a门', '后花园', '匪家'], isOnFire: false },
             '匪家': { x: 350, y: 650, links: ['后花园', '暗道', '匪口'], type: 'spawn', isOnFire: false },
-            'a门': { x: 750, y: 600, links: ['匪口', 'a门外'], isOnFire: false },
-            'a门外': { x: 880, y: 600, links: ['a门', 'a大'], isOnFire: false },
-            'a大': { x: 880, y: 350, links: ['a门外', '警家', 'a点'], isOnFire: false },
-            'a点': { x: 800, y: 150, links: ['a小上', 'a大'], type: 'site', isOnFire: false }
+            'a门': { x: 700, y: 500, links: ['匪口', '蓝箱'], isOnFire: false },
+            '蓝箱': { x: 700, y: 400, links: ['a门', 'a门外'], isOnFire: false },
+            'a门外': { x: 800, y: 400, links: ['蓝箱', 'a大'], isOnFire: false },
+            'a大': { x: 800, y: 200, links: ['a门外', '警家', 'a点'], isOnFire: false },
+            'a点': { x: 800, y: 100, links: ['a小上', 'a大'], type: 'site', isOnFire: false },
+            // 新增点位
+            'catwalk': { x: 520, y: 300, links: ['中远', 'a小下', '中门'], isOnFire: false }
         };
+
+        // 墙体定义：用于遮挡视线
+const WALLS = [
+    {x1: 20, y1: 45, x2: 20, y2: 205},
+    {x1: 70, y1: 380, x2: 70, y2: 445},
+    {x1: 30, y1: 445, x2: 70, y2: 445},
+    {x1: 30, y1: 445, x2: 30, y2: 695},
+    {x1: 30, y1: 695, x2: 690, y2: 695},
+    {x1: 690, y1: 695, x2: 690, y2: 660},
+    {x1: 120, y1: 205, x2: 120, y2: 205},
+    {x1: 20, y1: 50, x2: 20, y2: 50},
+    {x1: 20, y1: 205, x2: 20, y2: 280},
+    {x1: 20, y1: 45, x2: 195, y2: 45},
+    {x1: 195, y1: 45, x2: 240, y2: 70},
+    {x1: 470, y1: 110, x2: 485, y2: 110},
+    {x1: 485, y1: 115, x2: 485, y2: 160},
+    {x1: 485, y1: 110, x2: 485, y2: 120},
+    {x1: 485, y1: 160, x2: 620, y2: 160},
+    {x1: 755, y1: 65, x2: 755, y2: 30},
+    {x1: 755, y1: 30, x2: 860, y2: 30},
+    {x1: 860, y1: 30, x2: 860, y2: 90},
+    {x1: 860, y1: 90, x2: 870, y2: 90},
+    {x1: 870, y1: 90, x2: 870, y2: 180},
+    {x1: 870, y1: 180, x2: 890, y2: 180},
+    {x1: 890, y1: 180, x2: 890, y2: 240},
+    {x1: 890, y1: 240, x2: 875, y2: 255},
+    {x1: 875, y1: 255, x2: 875, y2: 425},
+    {x1: 875, y1: 425, x2: 895, y2: 425},
+    {x1: 895, y1: 425, x2: 895, y2: 555},
+    {x1: 895, y1: 555, x2: 870, y2: 555},
+    {x1: 875, y1: 555, x2: 840, y2: 555},
+    {x1: 840, y1: 500, x2: 840, y2: 580},
+    {x1: 840, y1: 580, x2: 780, y2: 580},
+    {x1: 780, y1: 500, x2: 780, y2: 580},
+    {x1: 780, y1: 570, x2: 745, y2: 570},
+    {x1: 745, y1: 495, x2: 745, y2: 570},
+    {x1: 725, y1: 480, x2: 725, y2: 660},
+    {x1: 690, y1: 660, x2: 725, y2: 660},
+    {x1: 620, y1: 265, x2: 500, y2: 265},
+    {x1: 500, y1: 265, x2: 500, y2: 220},
+    {x1: 500, y1: 220, x2: 620, y2: 220},
+    {x1: 250, y1: 240, x2: 250, y2: 265},
+    {x1: 250, y1: 265, x2: 175, y2: 305},
+    {x1: 175, y1: 305, x2: 145, y2: 305},
+    {x1: 145, y1: 280, x2: 145, y2: 300},
+    {x1: 145, y1: 305, x2: 145, y2: 295},
+    {x1: 125, y1: 280, x2: 145, y2: 280},
+    {x1: 125, y1: 280, x2: 125, y2: 325},
+    {x1: 125, y1: 325, x2: 175, y2: 325},
+    {x1: 20, y1: 280, x2: 80, y2: 280},
+    {x1: 80, y1: 280, x2: 80, y2: 325},
+    {x1: 40, y1: 325, x2: 80, y2: 325},
+    {x1: 40, y1: 325, x2: 40, y2: 380},
+    {x1: 40, y1: 380, x2: 70, y2: 380},
+    {x1: 310, y1: 70, x2: 240, y2: 70},
+    {x1: 255, y1: 240, x2: 405, y2: 240},
+    {x1: 260, y1: 240, x2: 250, y2: 240},
+    {x1: 215, y1: 340, x2: 215, y2: 340},
+    {x1: 125, y1: 380, x2: 270, y2: 380},
+    {x1: 215, y1: 300, x2: 260, y2: 300},
+    {x1: 260, y1: 300, x2: 260, y2: 270},
+    {x1: 260, y1: 270, x2: 415, y2: 270},
+    {x1: 405, y1: 240, x2: 415, y2: 240},
+    {x1: 415, y1: 240, x2: 415, y2: 270},
+    {x1: 270, y1: 380, x2: 290, y2: 380},
+    {x1: 125, y1: 380, x2: 125, y2: 445},
+    {x1: 125, y1: 445, x2: 185, y2: 445},
+    {x1: 550, y1: 520, x2: 555, y2: 520},
+    {x1: 465, y1: 240, x2: 500, y2: 250},
+    {x1: 745, y1: 495, x2: 745, y2: 495},
+    {x1: 745, y1: 495, x2: 745, y2: 445},
+    {x1: 745, y1: 445, x2: 725, y2: 445},
+    {x1: 725, y1: 445, x2: 725, y2: 480},
+    {x1: 545, y1: 335, x2: 545, y2: 435},
+    {x1: 545, y1: 330, x2: 545, y2: 340},
+    {x1: 185, y1: 445, x2: 200, y2: 445},
+    {x1: 415, y1: 525, x2: 205, y2: 525},
+    {x1: 200, y1: 445, x2: 200, y2: 525},
+    {x1: 200, y1: 525, x2: 210, y2: 525},
+    {x1: 660, y1: 435, x2: 660, y2: 505},
+    {x1: 545, y1: 435, x2: 545, y2: 520},
+    {x1: 545, y1: 520, x2: 660, y2: 520},
+    {x1: 660, y1: 520, x2: 660, y2: 500},
+    {x1: 660, y1: 345, x2: 660, y2: 435},
+    {x1: 660, y1: 345, x2: 745, y2: 345},
+    {x1: 745, y1: 345, x2: 745, y2: 330},
+    {x1: 680, y1: 220, x2: 740, y2: 220},
+    {x1: 740, y1: 220, x2: 745, y2: 220},
+    {x1: 310, y1: 70, x2: 470, y2: 110},
+    {x1: 250, y1: 125, x2: 250, y2: 190},
+    {x1: 175, y1: 325, x2: 215, y2: 300},
+    {x1: 290, y1: 380, x2: 345, y2: 380},
+    {x1: 345, y1: 380, x2: 415, y2: 360},
+    {x1: 415, y1: 360, x2: 415, y2: 525},
+    {x1: 745, y1: 220, x2: 745, y2: 335},
+    {x1: 415, y1: 245, x2: 430, y2: 245},
+    {x1: 755, y1: 65, x2: 755, y2: 85},
+    {x1: 755, y1: 85, x2: 630, y2: 85},
+    {x1: 630, y1: 85, x2: 630, y2: 265},
+    {x1: 615, y1: 265, x2: 630, y2: 265},
+    {x1: 680, y1: 220, x2: 675, y2: 220},
+    {x1: 620, y1: 220, x2: 630, y2: 220},
+    {x1: 620, y1: 160, x2: 630, y2: 160},
+    {x1: 675, y1: 220, x2: 665, y2: 220},
+    {x1: 665, y1: 220, x2: 665, y2: 330},
+    {x1: 545, y1: 330, x2: 665, y2: 330},
+    {x1: 665, y1: 120, x2: 665, y2: 120},
+    {x1: 665, y1: 120, x2: 665, y2: 120},
+    {x1: 665, y1: 115, x2: 665, y2: 130},
+    {x1: 665, y1: 145, x2: 665, y2: 160},
+    {x1: 665, y1: 175, x2: 665, y2: 190},
+    {x1: 665, y1: 115, x2: 725, y2: 115},
+];
+
+function getLineIntersection(p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y) {
+            const denominator = (p4y - p3y) * (p2x - p1x) - (p4x - p3x) * (p2y - p1y);
+            if (denominator === 0) return null; // 平行
+
+            const ua = ((p4x - p3x) * (p1y - p3y) - (p4y - p3y) * (p1x - p3x)) / denominator;
+            const ub = ((p2x - p1x) * (p1y - p3y) - (p2y - p1y) * (p1x - p3x)) / denominator;
+
+            if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+                return {
+                    x: p1x + ua * (p2x - p1x),
+                    y: p1y + ua * (p2y - p1y),
+                    dist: ua // 返回比例距离，方便比较
+                };
+            }
+            return null;
+        }
+
+        // 新增辅助函数：计算射线与圆的交点（用于烟雾弹视线阻挡）
+        function getCircleIntersection(p1x, p1y, p2x, p2y, cx, cy, r) {
+            const dx = p2x - p1x;
+            const dy = p2y - p1y;
+            const fx = p1x - cx;
+            const fy = p1y - cy;
+            const a = dx*dx + dy*dy;
+            const b = 2 * (fx*dx + fy*dy);
+            const c = (fx*fx + fy*fy) - r*r;
+            let discriminant = b*b - 4*a*c;
+            if (discriminant < 0) return null;
+            discriminant = Math.sqrt(discriminant);
+            const t1 = (-b - discriminant) / (2*a);
+            
+            // 我们只关心射线方向上第一个进入圆的点 (0 <= t <= 1)
+            if (t1 >= 0 && t1 <= 1) return { dist: t1 };
+            
+            // 如果起点已经在圆内或穿过圆心，可能需要第二个解，但简化起见，我们认为穿过烟雾就算遮挡
+            // 或者起点在外面穿过：t1是进入点
+            return null;
+        }
 
         const WEAPONS = {
             'AK-47': { cd: 110, ammo: 30, reload: 2500, price: 2700, isMain: true, damage: 35, headDamage: 70 },
@@ -412,7 +563,7 @@
         }
 
         let state = {
-            running: false, speed: 1, time: 115, score: {t:0, ct:0}, round: 1,
+            running: false, speed: 1, time: 115, score: {t:0, ct:0}, round: 1, roundUniqueId: 0,
             players: [], tracers: [], smokes: [], flashes: [], molotovs: [], grenades: [], droppedWeapons: [],
             bomb: { state: 'idle', carrier: null, x: 0, y: 0, node: null, time: 40, defuser: null, defuseProgress: 0, planter: null },
             lastTick: 0, radioView: 'T', radioHistory: { T: [], CT: [] },
@@ -422,6 +573,7 @@
             lastRetakeFlashCheck: 0,
             consecutiveLosses: { T: 0, CT: 0 },
             isSwapped: false,
+            swappedAt13: false,
             winTarget: 13,
             hasReleasedStartMolotov: false, // 标记是否已经发布了开局燃烧瓶指令
             hasReleasedCTB2Fire: false, // 标记是否已经发布了CT开局b2火指令
@@ -583,7 +735,19 @@
                 state.players.forEach(p => {
                     if (p.isAlive) {
                         const dist = Math.sqrt((p.x - this.x)**2 + (p.y - this.y)**2);
-                        if (dist < 150) p.blind(4); 
+                        if (dist < 150) {
+                            // 检查是否被墙体遮挡 (Raycast)
+                            let blocked = false;
+                            for (const wall of WALLS) {
+                                if (getLineIntersection(this.x, this.y, p.x, p.y, wall.x1, wall.y1, wall.x2, wall.y2)) {
+                                    blocked = true;
+                                    break;
+                                }
+                            }
+                            if (!blocked) {
+                                p.blind(4); 
+                            }
+                        } 
                     }
                 });
             
@@ -599,6 +763,7 @@
                 } else if (this.exploded && this.flashLife > 0) {
                     ctx.fillStyle = `rgba(255, 255, 255, ${this.flashLife})`;
                     ctx.beginPath();
+                    // 闪光弹爆炸视觉效果也可以考虑被墙遮挡，但为了简化效果保留圆形光晕，逻辑上已经处理了致盲遮挡
                     ctx.arc(this.x, this.y, 100 * (1.5 - this.flashLife), 0, Math.PI * 2);
                     ctx.fill();
                 }
@@ -948,7 +1113,7 @@
                 this.hp = 100; this.kills = 0; this.deaths = 0;
                 this.isAlive = true; this.hasBomb = false;
                 this.angle = 0; this.targetAngle = 0;
-                this.viewDistance = 250; this.viewAngle = 35 * (Math.PI / 180);
+                this.viewDistance = 250; this.viewAngle = 60 * (Math.PI / 180);
                 this.lastShot = 0; this.aimingAt = null;
                 this.isReloading = false; this.reloadStart = 0;
                 this.hitFlash = 0;
@@ -961,6 +1126,8 @@
                 this.isOnFire = false; // 跟踪玩家是否正在受到燃烧伤害
                 this.lastFireCheck = 0; // 上次检查燃烧伤害的时间
                 this.isEscapingFire = false; // 跟踪玩家是否正在执行踩火逃离任务
+                this.isReactingToSound = false; // 跟踪玩家是否正在对声音做出反应
+                this.soundReactionTime = 0; // 声音反应时间计数器
                 
                 this.money = 800; 
                 this.armorType = '空';
@@ -1508,13 +1675,13 @@
                 const isMoving = this.pathIdx < this.path.length || this.tempTarget !== null;
                 if (this.weapon === 'AWP' && !isMoving) {
                     this.viewDistance = 250 * 1.5;
-                    this.viewAngle = (35 * (Math.PI / 180)) / 2;
+                    this.viewAngle = 30 * (Math.PI / 180);
                 } else if (WEAPONS[this.weapon] && WEAPONS[this.weapon].视野缩短) {
                     this.viewDistance = 250 / 2;
-                    this.viewAngle = (35 * (Math.PI / 180)) / 2;
+                    this.viewAngle = (60 * (Math.PI / 180)) / 2;
                 } else {
                     this.viewDistance = 250;
-                    this.viewAngle = 35 * (Math.PI / 180);
+                    this.viewAngle = 60 * (Math.PI / 180);
                 }
                 if (this.team === 'T' && !this.hasBomb && state.bomb.state === 'idle' && !state.bomb.carrier) {
                     const distToBomb = Math.sqrt((this.x - state.bomb.x)**2 + (this.y - state.bomb.y)**2);
@@ -1587,8 +1754,16 @@
                         if (Math.abs(angleDiff) < 0.1) {
                             this.isHitReacting = false; // 完成转向后重置标志
                         }
+                    } else if (this.isReactingToSound) {
+                        // 听到枪声时转向开枪的方向
+                        let angleDiff = this.normalizeAngle(this.targetAngle - this.angle);
+                        this.angle += Math.sign(angleDiff) * 6 * dt * state.speed; // 与受击时相同的转向速度
+                        this.soundReactionTime += dt * state.speed;
+                        if (Math.abs(angleDiff) < 0.1 || this.soundReactionTime >= 1.0) {
+                            this.isReactingToSound = false; // 完成转向或反应时间结束后重置标志
+                        }
                     } else {
-                        if (this.blindTimer <= 0) this.moveAlongPath(dt);
+                        this.moveAlongPath(dt); // 移除blindTimer条件，使角色在闪光时也能移动
                         if (this.isIdle()) this.helpRequested = false; 
                     }
                 }
@@ -1677,6 +1852,28 @@
                         // 检查是否到达逃离火焰的目标地点
                         if (this.isEscapingFire && this.pathIdx >= this.path.length) {
                             this.isEscapingFire = false; // 任务完成，重置标志
+                        }
+                        
+                        // T方战术：当队友到达catwalk时，请求有闪的队友丢闪光
+                        if (this.team === 'T' && this.posNode === 'catwalk') {
+                            const tAlive = state.players.filter(p => p.isAlive && p.team === 'T');
+                            const flashers = tAlive.filter(p => p.utility.flash > 0 && p !== this);
+                            
+                            if (flashers.length > 0) {
+                                const flasher = flashers[Math.floor(Math.random() * flashers.length)];
+                                const rand = Math.random();
+                                
+                                if (rand < 0.5) {
+                                    // 请求丢a小上或a小下的闪光
+                                    const target = Math.random() < 0.5 ? 'a小上' : 'a小下';
+                                    this.broadcastRadio(`指挥：${flasher.name} 向 ${target} 丢一颗闪光！`);
+                                    flasher.throwFlash(target);
+                                } else {
+                                    // 请求丢a门外的闪光
+                                    this.broadcastRadio(`指挥：${flasher.name} 向 a门外 丢一颗闪光！`);
+                                    flasher.throwFlash('a门外');
+                                }
+                            }
                         }
                         
                         // 检查是否到达路径终点
@@ -1784,6 +1981,19 @@
                 // 播放武器音效
                 WeaponSounds.play(this.weapon);
                 
+                // 通知周围角色有枪声
+                state.players.forEach(p => {
+                    if (p.isAlive && p !== this && p.team !== this.team) {
+                        const dist = Math.sqrt((p.x - this.x)**2 + (p.y - this.y)**2);
+                        if (dist <= 100) {
+                            // 敌人在100米内，转向开枪的方向
+                            p.targetAngle = Math.atan2(this.y - p.y, this.x - p.x);
+                            p.isReactingToSound = true;
+                            p.soundReactionTime = 0;
+                        }
+                    }
+                });
+                
                 let hitChance = this.strafeMode === 'strafe' ? 0.25 : 0.45;
                 if (this.weapon === 'AWP') {
                     // 判断是否处于开火瞬间的急停状态
@@ -1831,8 +2041,15 @@
             plantBomb() {
                 state.bomb.state = 'planting'; this.isPlanting = true;
                 this.broadcastRadio("正在安放炸弹...");
-                WeaponSounds.play('c4_initiate'); // 开始激活炸弹时播放
+                WeaponSounds.play('c4_initiate'); 
+                
+                // 记录当前回合ID，防止上一回合的计时器在下一回合触发
+                const startRoundId = state.roundUniqueId;
+
                 setTimeout(() => {
+                    // 如果回合ID已经改变，说明已经进入新回合，取消本次下包操作
+                    if (state.roundUniqueId !== startRoundId) return;
+
                     if (this.isAlive && this.hasBomb && this.isPlanting) {
                         state.bomb.state = 'planted'; state.bomb.x = this.x; state.bomb.y = this.y;
                         state.bomb.node = this.posNode; state.bomb.time = 40;
@@ -1871,86 +2088,77 @@
                             }
                         }
 
-                        // 下包完成后，指挥会派遣一半以下的选手前往其他地方
-                        if (tAlive.length > 1) {
-                            const playersToSend = Math.floor(tAlive.length / 2);
-                            const availablePlayers = [...tAlive];
-                            const playersToMove = availablePlayers.sort(() => 0.5 - Math.random()).slice(0, playersToSend);
-                            
+                        // 下包完成后，每个T方前往指定位置守包
+                        tAlive.forEach((p) => {
+                            let targets = [];
                             if (state.bomb.node === 'a点') {
-                                // a点：a大、a小、警家
-                                const targets = ['a大', 'a小下', '警家'];
-                                playersToMove.forEach((p, index) => {
-                                    const target = targets[index % targets.length];
-                                    if (tLeader) { tLeader.broadcastRadio(`指挥：${p.name} 前往 ${target} 防守！`); }
-                                    p.destination = target;
-                                    p.path = findPath(p.posNode, target);
-                                    p.pathIdx = 0;
-                                });
+                                targets = ['a大', 'a小下', '警家', 'a点'];
                             } else if (state.bomb.node === 'b点') {
-                                // b点：b门、狗洞、b通
-                                const targets = ['b门', '狗洞', 'b2'];
-                                playersToMove.forEach((p, index) => {
-                                    const target = targets[index % targets.length];
-                                    if (tLeader) { tLeader.broadcastRadio(`指挥：${p.name} 前往 ${target} 防守！`); }
-                                    p.destination = target;
-                                    p.path = findPath(p.posNode, target);
-                                    p.pathIdx = 0;
-                                });
+                                targets = ['狗洞', 'b门', '沙地', 'b2', 'b点'];
                             }
-                        }
-                        
-                        // 剩余的选手留在包点防守
-                        const remainingPlayers = state.players.filter(p => p.isAlive && (p.team !== 'T' || !playersToMove || !playersToMove.includes(p)));
-                        remainingPlayers.forEach(p => {
-                            if (p.team === 'T') {
-                                p.destination = this.posNode;
-                                p.path = findPath(p.posNode, this.posNode);
+                            
+                            if (targets.length > 0) {
+                                const target = targets[Math.floor(Math.random() * targets.length)];
+                                if (tLeader && p !== tLeader && target !== p.posNode) { 
+                                    tLeader.broadcastRadio(`指挥：${p.name} 前往 ${target} 守包！`); 
+                                } else if (tLeader && p === tLeader && target !== p.posNode) {
+                                    tLeader.broadcastRadio(`我前往 ${target} 守包！`);
+                                }
+                                p.destination = target;
+                                p.path = findPath(p.posNode, target);
                                 p.pathIdx = 0;
                                 p.tempTarget = null;
-                                // 标记为防守状态，避免被战术重组逻辑重新分配任务
-                                p.isDefending = true;
                             }
-                        });
-                        
-                        // 已派遣的选手也标记为防守状态
-                        playersToMove.forEach(p => {
                             p.isDefending = true;
                         });
                     }
                 }, 3000 / state.speed);
             }
 
+            // 更新后的 canSee 方法，加入墙体检测
             canSee(other) {
                 if (this.blindTimer > 0) return false;
                 const dx = other.x - this.x, dy = other.y - this.y;
                 const distToEnemy = Math.sqrt(dx*dx + dy*dy);
                 if (distToEnemy > this.viewDistance) return false;
 
-                // 检查目标玩家是否在烟雾中
-                const isEnemyInSmoke = state.smokes.some(s => {
-                    if (s.isFlying || s.grenadeEffect > 0) return false;
-                    const distToEnemyFromSmoke = Math.sqrt((other.x - s.x)**2 + (other.y - s.y)**2);
-                    return distToEnemyFromSmoke < s.radius;
-                });
-                if (isEnemyInSmoke) return false;
+                // 区域判断：沙地-警家-忍者位下的敌人和a小下-a小上的敌人不会看到彼此
+                const area1 = ['沙地', '警家', '忍者位下'];
+                const area2 = ['a小下', 'a小上'];
+                const isInArea1 = area1.includes(this.posNode) && area1.includes(other.posNode);
+                const isInArea2 = area2.includes(this.posNode) && area2.includes(other.posNode);
+                const isCrossArea = (area1.includes(this.posNode) && area2.includes(other.posNode)) || (area2.includes(this.posNode) && area1.includes(other.posNode));
+                
+                // 如果是跨区域的敌人，则不能看到彼此
+                if (isCrossArea) return false;
 
-                // 检查视线是否被烟雾阻挡
+                // 检查是否被墙体阻挡
+                for (const wall of WALLS) {
+                    if (getLineIntersection(this.x, this.y, other.x, other.y, wall.x1, wall.y1, wall.x2, wall.y2)) {
+                        return false;
+                    }
+                }
+
+                // 检查是否被烟雾阻挡 (视线是否穿过任何活跃的烟雾弹)
+                // 原先的 distToSegment 逻辑被移除，改为更准确的射线-圆交点检测
                 const isBlockedBySmoke = state.smokes.some(s => {
-                    if (s.isFlying || s.grenadeEffect > 0) return false;
-                    const dToLine = distToSegment({x: this.x, y: this.y}, {x: other.x, y: other.y}, {x: s.x, y: s.y});
-                    if (dToLine < s.radius) {
-                        // 计算烟雾到玩家和敌人的距离
-                        const distToSmoke = Math.sqrt((this.x - s.x)**2 + (this.y - s.y)**2);
-                        const distToEnemyFromSmoke = Math.sqrt((other.x - s.x)**2 + (other.y - s.y)**2);
-                        
-                        // 如果烟雾到玩家的距离小于烟雾到敌人的距离，说明烟雾在自己和敌人之间，阻挡视线
-                        if (distToSmoke < distToEnemyFromSmoke) {
-                            return true;
-                        }
+                    if (s.isFlying) return false;
+                    
+                    // 1. 自己在烟雾中，视野完全被遮挡
+                    const distToSelfFromSmoke = Math.sqrt((this.x - s.x)**2 + (this.y - s.y)**2);
+                    if (distToSelfFromSmoke < s.radius) return true;
+                    
+                    // 2. 目标本身就在烟雾中
+                    const distToEnemyFromSmoke = Math.sqrt((other.x - s.x)**2 + (other.y - s.y)**2);
+                    if (distToEnemyFromSmoke < s.radius) return true;
+                    
+                    // 3. 视线穿过烟雾 (射线与圆相交)
+                    if (getCircleIntersection(this.x, this.y, other.x, other.y, s.x, s.y, s.radius)) {
+                        return true;
                     }
                     return false;
                 });
+                
                 if (isBlockedBySmoke) return false;
 
                 const angleTo = Math.atan2(dy, dx);
@@ -1958,6 +2166,74 @@
             }
 
             normalizeAngle(a) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
+
+            // 新增：绘制动态视野
+            draw(ctx) {
+                ctx.save(); 
+                // 绘制玩家本体圆点（不需要旋转）
+                let baseColor = this.team === 'T' ? [249, 115, 22] : [59, 130, 246];
+                let colorStr = this.blindTimer > 0 ? `rgb(255,255,255)` : `rgb(${baseColor[0]},${baseColor[1]},${baseColor[2]})`;
+                ctx.fillStyle = this.hitFlash > 0 ? `rgba(255,0,0,${this.hitFlash})` : colorStr;
+                ctx.beginPath(); ctx.arc(this.x, this.y, 8, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke();
+                
+                if(this.hasBomb) { ctx.fillStyle='red'; ctx.fillRect(this.x-4,this.y-4,8,8); }
+                ctx.fillStyle = 'white'; ctx.font = 'bold 9px Oswald'; ctx.textAlign = 'center'; ctx.fillText(this.name, this.x, this.y - 15);
+
+                // 绘制 2D 阴影视野
+                if (this.blindTimer <= 0) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+
+                    const rayCount = 50; // 射线数量，越多越平滑但性能消耗越大
+                    const startAngle = -this.viewAngle / 2;
+                    const endAngle = this.viewAngle / 2;
+                    const step = (endAngle - startAngle) / rayCount;
+
+                    for (let i = 0; i <= rayCount; i++) {
+                        const theta = startAngle + step * i;
+                        const globalTheta = this.angle + theta;
+                        
+                        // 射线的最大距离终点
+                        let endX = this.x + Math.cos(globalTheta) * this.viewDistance;
+                        let endY = this.y + Math.sin(globalTheta) * this.viewDistance;
+                        
+                        let minD = 1.0; // 1.0 表示没有阻挡，完全到达 viewDistance
+
+                        // 检测墙体碰撞
+                        for (const wall of WALLS) {
+                            const intersection = getLineIntersection(this.x, this.y, endX, endY, wall.x1, wall.y1, wall.x2, wall.y2);
+                            if (intersection && intersection.dist < minD) {
+                                minD = intersection.dist;
+                            }
+                        }
+
+                        // 检测烟雾弹碰撞 (将烟雾视为圆形墙壁)
+                        for (const s of state.smokes) {
+                            if (s.isFlying) continue;
+                            const intersection = getCircleIntersection(this.x, this.y, endX, endY, s.x, s.y, s.radius);
+                            if (intersection && intersection.dist < minD) {
+                                minD = intersection.dist;
+                            }
+                        }
+
+                        // 计算实际绘制点
+                        const drawX = this.x + (endX - this.x) * minD;
+                        const drawY = this.y + (endY - this.y) * minD;
+                        
+                        ctx.lineTo(drawX, drawY);
+                    }
+
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // 简单的视线边缘描边，增强视觉效果
+                    // ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    // ctx.stroke();
+                }
+                ctx.restore();
+            }
         }
 
         function distToSegment(p, v, w) {
@@ -1969,6 +2245,15 @@
         }
 
         function toggleRadio() { document.getElementById('radio-window').classList.toggle('-translate-x-[110%]'); }
+        
+        let hudVisible = true;
+        function toggleHUD() {
+            const hud = document.querySelector('.fixed.bottom-4');
+            hudVisible = !hudVisible;
+            hud.style.display = hudVisible ? 'flex' : 'none';
+            const btn = document.querySelector('button[onclick="toggleHUD()"]');
+            btn.textContent = hudVisible ? '隐藏选手UI' : '显示选手UI';
+        }
         function switchRadio(team) {
             state.radioView = team;
             document.getElementById('tab-t').className = `flex-1 py-2 text-[10px] font-bold ${team==='T'?'text-orange-500 border-orange-500':'text-slate-400 border-transparent'} border-b-2 uppercase tracking-tighter`;
@@ -2017,6 +2302,9 @@
         }
 
         function initRound() {
+            // 每回合更新唯一ID，用于验证定时器是否过期
+            state.roundUniqueId = Date.now();
+            
             state.time = 115; state.tracers = []; state.smokes = []; state.flashes = []; state.molotovs = []; state.grenades = []; state.droppedWeapons = []; state.isRoundEnded = false; state.lastTacticCheck = 0; state.lastSmokeCheck = 0; state.lastRetakeFlashCheck = 0;
             // 清空场上所有炸弹，取消炸弹倒计时
             state.bomb = { state: 'idle', carrier: null, x: MAP_NODES['匪家'].x, y: MAP_NODES['匪家'].y, node: '匪家', time: 40, defuser: null, defuseProgress: 0, planter: null };
@@ -2049,28 +2337,24 @@
             let T_NAMES = window.T_NAMES || [{n:'Player1', r:'Rifle'}, {n:'Player2', r:'Rifle'}, {n:'Player3', r:'Rifle'}, {n:'Player4', r:'Rifle'}, {n:'Player5', r:'AWP'}];
             let CT_NAMES = window.CT_NAMES || [{n:'Player6', r:'Rifle'}, {n:'Player7', r:'AWP'}, {n:'Player8', r:'Rifle'}, {n:'Player9', r:'Rifle'}, {n:'Player10', r:'Rifle'}];
             
-            // 保存当前队伍名称
-            const currentTTeamName = document.getElementById('t-team-name').innerText;
-            const currentCTTeamName = document.getElementById('ct-team-name').innerText;
-            
-            if (state.isSwapped) {
-                const temp = T_NAMES; T_NAMES = CT_NAMES; CT_NAMES = temp;
+            // 只在第13回合开始时进行一次队名和比分的互换
+            if (state.round === 13 && !state.swappedAt13) {
+                state.swappedAt13 = true;
+                // 保存当前队伍名称
+                const currentTTeamName = document.getElementById('t-team-name').innerText;
+                const currentCTTeamName = document.getElementById('ct-team-name').innerText;
+                
+                // 队名互换
                 document.getElementById('t-team-name').innerText = currentCTTeamName;
                 document.getElementById('ct-team-name').innerText = currentTTeamName;
-                // 检查是否为大比分
-                const isBigScore = state.score.t >= 10 || state.score.ct >= 10 || Math.abs(state.score.t - state.score.ct) > 5;
-                if (!isBigScore) {
-                    document.getElementById('t-score-box').classList.replace('bg-orange-600', 'bg-blue-600');
-                    document.getElementById('ct-score-box').classList.replace('bg-blue-600', 'bg-orange-600');
-                }
-            } else {
-                // 保持当前队伍名称不变
-                // 检查是否为大比分
-                const isBigScore = state.score.t >= 10 || state.score.ct >= 10 || Math.abs(state.score.t - state.score.ct) > 5;
-                if (!isBigScore) {
-                    document.getElementById('t-score-box').classList.replace('bg-blue-600', 'bg-orange-600');
-                    document.getElementById('ct-score-box').classList.replace('bg-orange-600', 'bg-blue-600');
-                }
+                
+                // 玩家配置互换
+                const temp = T_NAMES; T_NAMES = CT_NAMES; CT_NAMES = temp;
+                
+                // 大比分互换
+                const tempScore = state.score.t; state.score.t = state.score.ct; state.score.ct = tempScore;
+                
+                // 背景颜色保持不变
             }
 
             T_NAMES.forEach((cfg, i) => { 
@@ -2300,9 +2584,9 @@
                 return;
             }
 
-            if (state.round === 13) {
-                state.isSwapped = !state.isSwapped;
-                const tempScore = state.score.t; state.score.t = state.score.ct; state.score.ct = tempScore;
+            if (state.round === 12) { // 在第12回合结束时进行半场换边准备
+                // 只在第13回合开始时进行一次互换，这里不再交换
+                // 大比分互换将在第13回合开始时由initRound函数处理
             }
 
             const banner = document.getElementById('victory-banner');
@@ -2654,10 +2938,25 @@
             ctx.clearRect(0,0,1000,700);
             ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 20; ctx.lineCap='round';
             Object.values(MAP_NODES).forEach(n => n.links.forEach(l => { ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(MAP_NODES[l].x, MAP_NODES[l].y); ctx.stroke(); }));
+            
+            // 绘制墙体
+            ctx.strokeStyle = '#475569'; // Slate-600
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'butt';
+            WALLS.forEach(w => {
+                ctx.beginPath();
+                ctx.moveTo(w.x1, w.y1);
+                ctx.lineTo(w.x2, w.y2);
+                ctx.stroke();
+            });
+
             Object.keys(MAP_NODES).forEach(key => {
                 const node = MAP_NODES[key];
                 if (node.type === 'site') { ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(node.x, node.y, 40, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
-                ctx.fillStyle = 'white'; ctx.font = '10px Roboto Mono'; ctx.textAlign = 'center'; ctx.fillText(key.toUpperCase(), node.x, node.y + 25);
+                // 隐藏节点名称
+                // ctx.fillStyle = 'white'; ctx.font = '10px Roboto Mono'; ctx.textAlign = 'center'; ctx.fillText(key.toUpperCase(), node.x, node.y + 25);
+                // 隐藏节点坐标
+                // ctx.fillStyle = '#94a3b8'; ctx.font = '8px Roboto Mono'; ctx.textAlign = 'center'; ctx.fillText(`(${node.x}, ${node.y})`, node.x, node.y + 38);
             });
 
             state.droppedWeapons.forEach(dw => dw.draw(ctx));
@@ -2689,20 +2988,13 @@
                 });
             }
             
-            state.players.forEach(p => {
+            // 按照 Y 轴排序绘制玩家，以实现简单的遮挡关系
+            // 虽然是 2D 俯视，但这样可以让下方的物体覆盖上方的
+            const sortedPlayers = [...state.players].sort((a, b) => a.y - b.y);
+            
+            sortedPlayers.forEach(p => {
                 if (!p.isAlive) return;
-                ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
-                if (p.blindTimer <= 0) {
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0, p.viewDistance, -p.viewAngle/2, p.viewAngle/2); ctx.closePath(); ctx.fill();
-                }
-                ctx.restore();
-                let baseColor = p.team === 'T' ? [249, 115, 22] : [59, 130, 246];
-                let colorStr = p.blindTimer > 0 ? `rgb(255,255,255)` : `rgb(${baseColor[0]},${baseColor[1]},${baseColor[2]})`;
-                ctx.fillStyle = p.hitFlash > 0 ? `rgba(255,0,0,${p.hitFlash})` : colorStr;
-                ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI*2); ctx.fill();
-                ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke();
-                if(p.hasBomb) { ctx.fillStyle='red'; ctx.fillRect(p.x-4,p.y-4,8,8); }
-                ctx.fillStyle = 'white'; ctx.font = 'bold 9px Oswald'; ctx.textAlign = 'center'; ctx.fillText(p.name, p.x, p.y - 15);
+                p.draw(ctx);
             });
             
             // 绘制手雷和爆炸特效在最顶层
@@ -2741,12 +3033,10 @@
                     <div class="flex justify-between text-[10px] tracking-tighter relative z-10">
                         <span class="text-yellow-400 font-bold">$${p.money}</span>
                         <div class="flex items-center gap-1">
-                            <!-- 显示道具 -->
                             <span>${'☁'.repeat(p.utility.smoke)}</span>
                             <span>${'🔥'.repeat(p.utility.fire)}</span>
                             <span>${'💣'.repeat(p.utility.nade)}</span>
                             <span>${'🧨'.repeat(p.utility.flash)}</span>
-                            <!-- 显示护甲 -->
                             <span class="text-white font-bold uppercase ml-2">${p.armorType}</span>
                         </div>
                     </div>
