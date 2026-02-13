@@ -1792,10 +1792,10 @@
                 }
                 if (this.weapon === 'M4A1-S') hitChance += 0.15;
 
-                // USP的爆头率为40%
+                // USP的爆头率恢复到正常水平
                 let isHS;
                 if (this.weapon === 'USP-S') {
-                    isHS = Math.random() > 0.5; // 40%的概率爆头
+                    isHS = Math.random() > 0.7; // 30%的概率爆头
                 } else {
                     isHS = Math.random() > 0.7; // 30%的概率爆头
                 }
@@ -1940,9 +1940,14 @@
                     if (s.isFlying || s.grenadeEffect > 0) return false;
                     const dToLine = distToSegment({x: this.x, y: this.y}, {x: other.x, y: other.y}, {x: s.x, y: s.y});
                     if (dToLine < s.radius) {
+                        // 计算烟雾到玩家和敌人的距离
                         const distToSmoke = Math.sqrt((this.x - s.x)**2 + (this.y - s.y)**2);
-                        if (distToSmoke - distToEnemy > s.radius) return false;
-                        return true;
+                        const distToEnemyFromSmoke = Math.sqrt((other.x - s.x)**2 + (other.y - s.y)**2);
+                        
+                        // 如果烟雾到玩家的距离小于烟雾到敌人的距离，说明烟雾在自己和敌人之间，阻挡视线
+                        if (distToSmoke < distToEnemyFromSmoke) {
+                            return true;
+                        }
                     }
                     return false;
                 });
@@ -3036,5 +3041,4 @@
         initRound(); requestAnimationFrame(loop);
     </script>
 </body>
-
 </html>
